@@ -1,0 +1,2 @@
+1.usertrap()
+2.p->trapframe->a7 = 7, SYS_exec
