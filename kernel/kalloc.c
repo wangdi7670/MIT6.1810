@@ -80,3 +80,14 @@ kalloc(void)
     memset((char*)r, 5, PGSIZE); // fill with junk
   return (void*)r;
 }
+
+// the freemem field should be set to the number of bytes of free memory
+uint64 get_freemem() {
+  struct run *r = kmem.freelist;
+  int n = 0;
+  while (r) {
+    n++;
+    r = r->next;
+  }
+  return n * PGSIZE;
+}

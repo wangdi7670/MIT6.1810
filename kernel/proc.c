@@ -684,3 +684,17 @@ procdump(void)
     printf("\n");
   }
 }
+
+
+// the nproc field should be set to the number of processes whose state is not UNUSED
+uint64 get_nproc() {
+  struct proc *p;
+  int num = 0;
+  for (p = proc; p < &proc[NPROC]; p++) {
+    if (p->state != UNUSED) {
+      num++;
+    }
+  }
+
+  return num;
+}
