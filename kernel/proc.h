@@ -105,6 +105,5 @@ struct proc {
   struct inode *cwd;           // Current directory
   char name[16];               // Process name (debugging)
 
-  // uint64 usyscall_pa;          // USYSCALL physical address corresponding to USYSCALL virtual address
   struct usyscall *ucall;
 };
