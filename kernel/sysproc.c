@@ -91,3 +91,15 @@ sys_uptime(void)
   release(&tickslock);
   return xticks;
 }
+
+uint64 sys_demo(void) {
+  int n;
+  argint(0, &n);
+  // printf("hello, demo! %d\n", n);
+  if (n == 1) {
+    demo1();
+  } else if (n == 2) {
+    demo2();
+  }
+  return 0;
+}
