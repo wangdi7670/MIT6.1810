@@ -191,6 +191,7 @@ void            virtio_disk_intr(void);
 // demos.c
 void demo1(void);
 void demo2(void);
+void demo4(void);
 
 
 // asmdemo.s

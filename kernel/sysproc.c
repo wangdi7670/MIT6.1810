@@ -100,6 +100,8 @@ uint64 sys_demo(void) {
     demo1();
   } else if (n == 2) {
     demo2();
+  } else if (n == 4) {
+    demo4();
   }
   return 0;
 }
