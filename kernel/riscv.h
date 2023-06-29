@@ -18,6 +18,15 @@ r_mhartid()
 #define MSTATUS_MIE (1L << 3)    // machine-mode interrupt enable.
 
 static inline uint64
+r_fp()
+{
+  uint64 x;
+  asm volatile("mv %0, s0" : "=r" (x) );
+  return x;
+}
+
+
+static inline uint64
 r_mstatus()
 {
   uint64 x;
@@ -336,7 +345,7 @@ typedef uint64 *pagetable_t; // 512 PTEs
 #define PGSHIFT 12  // bits of offset within a page
 
 #define PGROUNDUP(sz)  (((sz)+PGSIZE-1) & ~(PGSIZE-1))
-#define PGROUNDDOWN(a) (((a)) & ~(PGSIZE-1))
+#define PGROUNDDOWN(a) (((a)) & ~(PGSIZE-1))  // 把 a 的低12位清0
 
 #define PTE_V (1L << 0) // valid
 #define PTE_R (1L << 1)
