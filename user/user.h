@@ -23,6 +23,8 @@ char* sbrk(int);
 int sleep(int);
 int uptime(void);
 void demo(int);
+int sigalarm(int ticks, void (*handler)(void));
+int sigreturn();
 
 // ulib.c
 int stat(const char*, struct stat*);

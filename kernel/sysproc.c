@@ -107,3 +107,17 @@ uint64 sys_demo(void) {
   }
   return 0;
 }
+
+uint64 sys_sigalarm(void) {
+  printf("hello, sigalarm!\n");
+
+
+  return 0;
+}
+
+uint64 sys_sigreturn(void) {
+  printf("hello, sigreturn!\n");
+
+
+  return 0;
+}
