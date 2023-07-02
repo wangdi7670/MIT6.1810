@@ -109,14 +109,23 @@ uint64 sys_demo(void) {
 }
 
 uint64 sys_sigalarm(void) {
-  printf("hello, sigalarm!\n");
+  // printf("hello, sigalarm!\n");
+  int interval;
+  argint(0, &interval);
+
+  uint64 handler;
+  argaddr(1, &handler);
+
+  struct proc *p = myproc();
+  p->interval = interval;
+  p->handler = (void (*)(void)) handler;
 
 
   return 0;
 }
 
 uint64 sys_sigreturn(void) {
-  printf("hello, sigreturn!\n");
+  // printf("hello, sigreturn!\n");
 
 
   return 0;
