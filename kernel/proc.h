@@ -108,4 +108,6 @@ struct proc {
   int interval;                // sigalarm-interval
   void (*handler)();           // sigalarm-handler
   int ticksFromLast;           // how many ticks have passed since the last call
+  struct trapframe *alarmframe;// 
+  int duringHandler;           // 1: duringHandler    0:  no duringHandler
 };
