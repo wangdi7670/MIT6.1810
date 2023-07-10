@@ -5,6 +5,8 @@
 #include "riscv.h"
 #include "defs.h"
 #include "fs.h"
+#include "spinlock.h"
+#include "proc.h"
 
 /*
  * the kernel's page table.
@@ -183,9 +185,13 @@ uvmunmap(pagetable_t pagetable, uint64 va, uint64 npages, int do_free)
       panic("uvmunmap: not mapped");
     if(PTE_FLAGS(*pte) == PTE_V)
       panic("uvmunmap: not a leaf");
-    if(do_free){
-      uint64 pa = PTE2PA(*pte);
-      kfree((void*)pa);
+
+    // decrement a page's count each time any process drops the page from its page table
+    uint64 pa = PTE2PA(*pte);
+    decrement(pa);
+
+    if(do_free && get_ref_count(pa) == 0){
+      kfree((void *)pa);
     }
     *pte = 0;
   }
@@ -308,20 +314,36 @@ uvmcopy(pagetable_t old, pagetable_t new, uint64 sz)
   pte_t *pte;
   uint64 pa, i;
   uint flags;
-  char *mem;
+  // char *mem;
 
   for(i = 0; i < sz; i += PGSIZE){
     if((pte = walk(old, i, 0)) == 0)
       panic("uvmcopy: pte should exist");
     if((*pte & PTE_V) == 0)
       panic("uvmcopy: page not present");
+
+  // 标记上是 COW-page, 用 PTE_OLD_W 记录之前是否是 writeable 
+    *pte |= PTE_IS_COW;
+    if (*pte & PTE_W) {
+      *pte |= PTE_OLD_W;
+    } else {
+      *pte &= (~PTE_OLD_W);
+    }
+    *pte = PTE_CLEAR_W(*pte);
+
     pa = PTE2PA(*pte);
     flags = PTE_FLAGS(*pte);
-    if((mem = kalloc()) == 0)
+
+/*     if((mem = kalloc()) == 0)
       goto err;
-    memmove(mem, (char*)pa, PGSIZE);
-    if(mappages(new, i, PGSIZE, (uint64)mem, flags) != 0){
-      kfree(mem);
+    memmove(mem, (char*)pa, PGSIZE); */
+
+    // increment a page's reference when fork causes a child to share a page
+    increment(pa);
+
+    // if(mappages(new, i, PGSIZE, (uint64)mem, flags) != 0){
+    if(mappages(new, i, PGSIZE, pa, flags) != 0){
+      // kfree(mem);
       goto err;
     }
   }
@@ -355,6 +377,8 @@ copyout(pagetable_t pagetable, uint64 dstva, char *src, uint64 len)
 
   while(len > 0){
     va0 = PGROUNDDOWN(dstva);
+    copy_on_write(va0);
+
     pa0 = walkaddr(pagetable, va0);
     if(pa0 == 0)
       return -1;

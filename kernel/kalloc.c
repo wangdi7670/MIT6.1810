@@ -23,10 +23,43 @@ struct {
   struct run *freelist;
 } kmem;
 
+struct {
+  struct spinlock lock;
+  int arr[(PHYSTOP - KERNBASE) / PGSIZE];
+} reference_count;
+
+
+void increment(uint64 pa) {
+  acquire(&reference_count.lock);
+  reference_count.arr[PA2RCID(pa)]++;
+  release(&reference_count.lock);
+}
+
+
+void decrement(uint64 pa) {
+  acquire(&reference_count.lock);
+  reference_count.arr[PA2RCID(pa)]--;
+  release(&reference_count.lock);
+}
+
+int get_ref_count(uint64 pa) {
+  acquire(&reference_count.lock);
+  int a = reference_count.arr[PA2RCID(pa)];
+  release(&reference_count.lock);
+  return a;
+}
+
+
 void
 kinit()
 {
   initlock(&kmem.lock, "kmem");
+  initlock(&reference_count.lock, "reference_count");
+
+/*   for (int i = 0; i < (PHYSTOP - KERNBASE) / PGSIZE; i++) {
+    reference_count.arr[i] = PHYSTOP;
+  } */
+
   freerange(end, (void*)PHYSTOP);
 }
 
@@ -78,5 +111,26 @@ kalloc(void)
 
   if(r)
     memset((char*)r, 5, PGSIZE); // fill with junk
+
+  uint64 pa = (uint64) r;
+
+  if (pa % PGSIZE != 0 || (char *)pa < end || pa >= PHYSTOP) {
+    if (pa % PGSIZE != 0) {
+      printf("pa % PGSIZE != 0\n");
+    }
+    else if ((char*) pa < end) {
+      printf("pa < end, pa = %p\n", pa);
+    }
+    else if (pa >= PHYSTOP) {
+      printf("pa >= PHYSTOP\n");
+    }
+    panic("kalloc");
+  }
+
+  // Set a page's reference count to 1 when kalloc() allocates it
+  acquire(&reference_count.lock);
+  reference_count.arr[PA2RCID(pa)] = 1;
+  release(&reference_count.lock);
+
   return (void*)r;
 }
