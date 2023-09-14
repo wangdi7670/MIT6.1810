@@ -33,8 +33,8 @@
 // Contents of the header block, used for both the on-disk header block
 // and to keep track in memory of logged block# before commit.
 struct logheader {
-  int n;
-  int block[LOGSIZE];
+  int n;  // the count of log blocks
+  int block[LOGSIZE];  // an array of sector numbers, one for each of the logged blocks
 };
 
 struct log {
@@ -90,6 +90,7 @@ read_head(void)
   struct logheader *lh = (struct logheader *) (buf->data);
   int i;
   log.lh.n = lh->n;
+  // printf("lh->n = %d\n", lh->n);  // 0
   for (i = 0; i < log.lh.n; i++) {
     log.lh.block[i] = lh->block[i];
   }
