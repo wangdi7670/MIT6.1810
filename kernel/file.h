@@ -2,7 +2,7 @@ struct file {
 #ifdef LAB_NET
   enum { FD_NONE, FD_PIPE, FD_INODE, FD_DEVICE, FD_SOCK } type;
 #else
-  enum { FD_NONE, FD_PIPE, FD_INODE, FD_DEVICE } type;
+  enum { FD_NONE, FD_PIPE, FD_INODE, FD_DEVICE } type;  // FD: file descriptor
 #endif
   int ref; // reference count
   char readable;
