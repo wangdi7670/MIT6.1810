@@ -3,7 +3,7 @@
 
 
 #define ROOTINO  1   // root i-number
-#define BSIZE 1024  // block size
+#define BSIZE 1024  // block size(1024 bytes per block)
 
 // Disk layout:
 // [ boot block | super block | log | inode blocks |
@@ -25,7 +25,7 @@ struct superblock {
 #define FSMAGIC 0x10203040
 
 #define NDIRECT 12
-#define NINDIRECT (BSIZE / sizeof(uint))
+#define NINDIRECT (BSIZE / sizeof(uint))  // 4 bytes per block number
 #define MAXFILE (NDIRECT + NINDIRECT)
 
 // On-disk inode structure
@@ -45,10 +45,10 @@ struct dinode {
 #define IBLOCK(i, sb)     ((i) / IPB + sb.inodestart)
 
 // Bitmap bits per block
-#define BPB           (BSIZE*8)
+#define BPB           (BSIZE*8)  // How much bits do a bitmap block have?
 
 // Block of free map containing bit for block b
-#define BBLOCK(b, sb) ((b)/BPB + sb.bmapstart)
+#define BBLOCK(b, sb) ((b)/BPB + sb.bmapstart)  // get the bitmap-block that contains bit for b
 
 // Directory is a file containing a sequence of dirent structures.
 #define DIRSIZ 14
