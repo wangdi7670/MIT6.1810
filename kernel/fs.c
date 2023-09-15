@@ -689,6 +689,7 @@ namei(char *path)
   return namex(path, 0, name);
 }
 
+// returning the inode of parent directory for path, and copying the final element into name
 struct inode*
 nameiparent(char *path, char *name)
 {
