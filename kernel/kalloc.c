@@ -169,15 +169,11 @@ void *kalloc ()
   struct run *r = (struct run *) 0;
   int flag = 0;
 
-  if (&mems[id].n < 0) {
+  if (mems[id].n < 0) {
     panic("kfree_new, n < 0");
   }
 
   if (mems[id].n) {
-    if (!mems[id].freelist) {
-      panic("wrong mems[id].freelist");
-    }
-
     acquire(&mems[id].lock);
     if (mems[id].n) {
       r = mems[id].freelist;
@@ -195,18 +191,15 @@ void *kalloc ()
         continue;
       }
 
-      if (&mems[i].n < 0) {
+      if (mems[i].n < 0) {
         panic("kfree_new, n < 0");
       }
 
       if (mems[i].n) {
-        if (!mems[i].freelist) {
-          panic("wrong mems[i].freelist");
-        }
-      
         acquire(&mems[i].lock);
 
         if (!mems[i].n) {
+          release(&mems[i].lock);  // make sure the number of calls to acquire() is equal to the number of calls to realse()
           continue;
         }
 
