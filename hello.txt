@@ -1,0 +1,8 @@
+// superblock
+sb->ninodes = 200
+sb->inodestart = 32
+sb->bmapstart = 45
+sb->nlog = 30
+sb->nblocks = 1954
+sb->size = 2000
+sb->logstart = 2
