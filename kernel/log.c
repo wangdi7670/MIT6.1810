@@ -77,7 +77,15 @@ install_trans(int recovering)
     bwrite(dbuf);  // write dst to disk
     if(recovering == 0)
       bunpin(dbuf);
+    
+    if (lbuf->refcnt <= 0) {
+      panic("wrong lbuf->refcnt");
+    }
     brelse(lbuf);
+
+    if (dbuf->refcnt <= 0) {
+      panic("wrong dbuf->refcnt");
+    }
     brelse(dbuf);
   }
 }
