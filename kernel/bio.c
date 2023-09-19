@@ -160,9 +160,6 @@ bunpin(struct buf *b) {
 #define TABLE_SIZE 15
 #define BUCKET_SIZE 2
 
-void test_init();
-int bucket_length(struct bucket *bkt);
-
 
 struct bucket {
   struct spinlock lock;
@@ -170,11 +167,13 @@ struct bucket {
   struct buf head;
 };
 
-
 struct {
   struct spinlock lock;
   struct bucket buf_table[TABLE_SIZE];
 } bcache;
+
+void test_init();
+int bucket_length(struct bucket *bkt);
 
 
 void bucket_init(struct bucket *bkt)  // 2. 
@@ -204,7 +203,7 @@ void binit()
     bucket_init(&bcache.buf_table[i]);
   }
 
-  test_init();
+  // test_init();
 }
 
 
@@ -225,6 +224,7 @@ int bucket_length(struct bucket *bkt)
   return count;
 }
 
+
 void test_init()
 {
   int count = 0;
@@ -237,25 +237,89 @@ void test_init()
     panic("wrong init");
   }
 
-  printf("init passed OK==\n");
+  printf("test init: OK\n");
+}
+
+
+// move buf to the bkt's head
+void move_buf(struct buf* b, struct bucket *bkt)
+{
+  b->prev->next = b->next;
+  b->next->prev = b->prev;
+
+  b->next = bkt->head.next;
+  b->prev = &bkt->head;
+  bkt->head.next->prev = b;
+  bkt->head.next = b;
 }
 
 
 static struct buf* bget(uint dev, uint blockno)
 {
+  if (dev != 1) {
+    panic("wrong dev");
+  }
 
+  acquire(&bcache.lock);
+  
+  int id = blockno % TABLE_SIZE;
+  struct bucket *bkt = &bcache.buf_table[id];
+  struct buf *b;
+
+  // Is the block cached?
+  for (b = bkt->head.next; b != &bkt->head; b = b->next) {
+    if (b->blockno == blockno && b->dev == dev) {
+      b->refcnt++;
+      release(&bcache.lock);
+      acquiresleep(&b->lock);
+      return b;
+    }
+  }
+
+  // Not cached
+  for (int i = 0; i < TABLE_SIZE; i++) {
+    struct bucket *temp = &bcache.buf_table[i];
+    for (b = temp->head.next; b != &temp->head; b = b->next) {
+      if (b->refcnt == 0) {
+        b->refcnt++;
+        b->blockno = blockno;
+        b->dev = dev;
+        b->valid = 0;
+
+        // move the buf from one bucket to another bucket
+        move_buf(b, bkt);
+      
+        release(&bcache.lock);
+        acquiresleep(&b->lock);
+        return b;
+      }
+    }
+  }
+
+  panic("no buffer");
 }
+
 
 void brelse(struct buf *b)
 {
+  if(!holdingsleep(&b->lock)) {
+    panic("brelse");
+  }
 
+  releasesleep(&b->lock);
+
+  acquire(&bcache.lock);
+  b->refcnt--;
+  release(&bcache.lock);
 }
+
 
 void bpin(struct buf *b) {
   acquire(&bcache.lock);
   b->refcnt++;
   release(&bcache.lock);
 }
+
 
 void bunpin(struct buf *b) {
   acquire(&bcache.lock);
