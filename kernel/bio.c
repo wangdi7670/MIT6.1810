@@ -260,17 +260,19 @@ static struct buf* bget(uint dev, uint blockno)
     panic("wrong dev");
   }
 
-  acquire(&bcache.lock);
+  // acquire(&bcache.lock);
   
   int id = blockno % TABLE_SIZE;
   struct bucket *bkt = &bcache.buf_table[id];
   struct buf *b;
 
+  acquire(&bkt->lock);
   // Is the block cached?
   for (b = bkt->head.next; b != &bkt->head; b = b->next) {
     if (b->blockno == blockno && b->dev == dev) {
       b->refcnt++;
-      release(&bcache.lock);
+      // release(&bcache.lock);
+      release(&bkt->lock);
       acquiresleep(&b->lock);
       return b;
     }
@@ -278,7 +280,12 @@ static struct buf* bget(uint dev, uint blockno)
 
   // Not cached
   for (int i = 0; i < TABLE_SIZE; i++) {
+    if (i == id) {
+      continue;
+    }
     struct bucket *temp = &bcache.buf_table[i];
+    acquire(&temp->lock);
+
     for (b = temp->head.next; b != &temp->head; b = b->next) {
       if (b->refcnt == 0) {
         b->refcnt++;
@@ -289,11 +296,15 @@ static struct buf* bget(uint dev, uint blockno)
         // move the buf from one bucket to another bucket
         move_buf(b, bkt);
       
-        release(&bcache.lock);
+        // release(&bcache.lock);
+        release(&bkt->lock);
+        release(&temp->lock);
         acquiresleep(&b->lock);
         return b;
       }
     }
+
+    release(&temp->lock);
   }
 
   panic("no buffer");
@@ -308,23 +319,32 @@ void brelse(struct buf *b)
 
   releasesleep(&b->lock);
 
-  acquire(&bcache.lock);
+  int id = b->blockno % TABLE_SIZE;
+  struct bucket *bkt = &bcache.buf_table[id];
+
+  acquire(&bkt->lock);
   b->refcnt--;
-  release(&bcache.lock);
+  release(&bkt->lock);
 }
 
 
 void bpin(struct buf *b) {
-  acquire(&bcache.lock);
+  int id = b->blockno % TABLE_SIZE;
+  struct bucket *bkt = &bcache.buf_table[id];
+
+  acquire(&bkt->lock);
   b->refcnt++;
-  release(&bcache.lock);
+  release(&bkt->lock);
 }
 
 
 void bunpin(struct buf *b) {
-  acquire(&bcache.lock);
+  int id = b->blockno % TABLE_SIZE;
+  struct bucket *bkt = &bcache.buf_table[id];
+
+  acquire(&bkt->lock);
   b->refcnt--;
-  release(&bcache.lock);
+  release(&bkt->lock);
 }
 
 // Return a locked buf with the contents of the indicated block.
