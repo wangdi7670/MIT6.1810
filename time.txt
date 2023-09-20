@@ -1,0 +1,4 @@
+lab-lock/Memory allocator: 1小天 
+lab-lock/Buffer cache: 3个晚上
+
+当把 buffer-cache 这个实验做对的时候还是挺爽的，因为这个lab真的想了很长时间，脑子感觉都不够用了

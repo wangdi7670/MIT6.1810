@@ -253,24 +253,30 @@ void move_buf(struct buf* b, struct bucket *bkt)
   bkt->head.next = b;
 }
 
-/*
-这种方案会导致死锁，例如，
-第一个进程，id = 1, i = 0, 即先获得bucket1_lock，后获得bucket0_lock，
-第二个进程，id = 0, i = 1, 即先获得bucket0_lock，后获得bucket1_lock，
-这就死锁了。
 
-personal opinion: 
-1.两个阶段必须保持原子性
-2.若保证原子性，目前这种方案就注定会死锁
-*/
+struct buf *find_again(struct bucket *bkt, uint dev, uint blockno)
+{
+  if (!holding(&bkt->lock)) {
+    panic("find_again");
+  }
+
+  struct buf *b = bkt->head.next;
+  for (; b != &bkt->head; b = b->next) {
+    if (b->blockno == blockno && b->dev == dev) {
+      return b;
+    }
+  }
+
+  return (struct buf*) 0;
+}
+
+
 static struct buf* bget(uint dev, uint blockno)
 {
   if (dev != 1) {
     panic("wrong dev");
   }
 
-  // acquire(&bcache.lock);
-  
   int id = blockno % TABLE_SIZE;
   struct bucket *bkt = &bcache.buf_table[id];
   struct buf *b;
@@ -280,20 +286,38 @@ static struct buf* bget(uint dev, uint blockno)
   for (b = bkt->head.next; b != &bkt->head; b = b->next) {
     if (b->blockno == blockno && b->dev == dev) {
       b->refcnt++;
-      // release(&bcache.lock);
       release(&bkt->lock);
       acquiresleep(&b->lock);
       return b;
     }
   }
+  release(&bkt->lock);
 
   // Not cached
   for (int i = 0; i < TABLE_SIZE; i++) {
     if (i == id) {
       continue;
     }
+
     struct bucket *temp = &bcache.buf_table[i];
-    acquire(&temp->lock);
+
+    // 注意加锁的顺序，make sure avoid dead lock!
+    if (i < id) {
+      acquire(&temp->lock);
+      acquire(&bkt->lock);
+    } else {
+      acquire(&bkt->lock);
+      acquire(&temp->lock);
+    }
+    
+    b = find_again(bkt, dev, blockno);
+    if (b) {
+      b->refcnt++;
+      release(&bkt->lock);
+      release(&temp->lock);
+      acquiresleep(&b->lock);
+      return b;
+    }
 
     for (b = temp->head.next; b != &temp->head; b = b->next) {
       if (b->refcnt == 0) {
@@ -305,7 +329,6 @@ static struct buf* bget(uint dev, uint blockno)
         // move the buf from one bucket to another bucket
         move_buf(b, bkt);
       
-        // release(&bcache.lock);
         release(&bkt->lock);
         release(&temp->lock);
         acquiresleep(&b->lock);
@@ -314,6 +337,7 @@ static struct buf* bget(uint dev, uint blockno)
     }
 
     release(&temp->lock);
+    release(&bkt->lock);
   }
 
   panic("no buffer");
