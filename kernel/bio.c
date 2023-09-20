@@ -253,7 +253,16 @@ void move_buf(struct buf* b, struct bucket *bkt)
   bkt->head.next = b;
 }
 
+/*
+这种方案会导致死锁，例如，
+第一个进程，id = 1, i = 0, 即先获得bucket1_lock，后获得bucket0_lock，
+第二个进程，id = 0, i = 1, 即先获得bucket0_lock，后获得bucket1_lock，
+这就死锁了。
 
+personal opinion: 
+1.两个阶段必须保持原子性
+2.若保证原子性，目前这种方案就注定会死锁
+*/
 static struct buf* bget(uint dev, uint blockno)
 {
   if (dev != 1) {
