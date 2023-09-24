@@ -529,6 +529,9 @@ stati(struct inode *ip, struct stat *st)
 int
 readi(struct inode *ip, int user_dst, uint64 dst, uint off, uint n)
 {
+  if (!holdingsleep(&ip->lock)) {
+    panic("no holding lock");
+  }
   uint tot, m;
   struct buf *bp;
 
@@ -563,6 +566,9 @@ readi(struct inode *ip, int user_dst, uint64 dst, uint off, uint n)
 int
 writei(struct inode *ip, int user_src, uint64 src, uint off, uint n)
 {
+  if (!holdingsleep(&ip->lock)) {
+    panic("no holding lock");
+  }
   uint tot, m;
   struct buf *bp;
 
