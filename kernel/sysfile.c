@@ -504,8 +504,76 @@ sys_pipe(void)
   return 0;
 }
 
+// return success (0) or failure (-1)
 uint64 sys_symlink()
 {
-  printf("hello, sys_symlink\n");
+  // printf("hello, sys_symlink\n");
+  char target[MAXPATH];
+  char path[MAXPATH];
+  
+  int n;
+  if((n = argstr(0, target, MAXPATH)) < 0)
+    return -1;
+  
+  if((n = argstr(1, path, MAXPATH)) < 0)
+    return -1;
+
+  begin_op();
+  /* 1. create symbolic link */
+  char name[DIRSIZ];
+
+  struct inode *dp = nameiparent(path, name);
+  if (dp == 0) {
+    return -1;
+  }
+
+  ilock(dp);
+
+  // TODO: deal with ip != 0
+  struct inode *ip = dirlookup(dp, name, 0);
+  if (ip != 0) {
+    printf("found name = %s\n", name);
+    panic("the symbolic link already exists");
+  }
+
+  ip = ialloc(dp->dev, T_SYMLINK);
+  if (ip == 0) {
+    iunlockput(dp);
+    return -1;
+  }
+
+  ilock(ip);
+  ip->major = 0;
+  ip->minor = 0;
+  ip->nlink = 1;
+  iupdate(ip);
+
+  if (dirlink(dp, name, ip->inum) < 0) {
+    goto fail;
+  }
+
+  /* 2. write target path to the symbolic link */
+  if (writei(ip, 0, (uint64)target, 0, MAXPATH) != MAXPATH) {
+    panic("wrong write symliink");
+  }
+
+/*   char buf[MAXPATH];
+  readi(ip, 0, (uint64)buf, 0, MAXPATH);
+  printf("buf = %s\n", buf); */
+
+  iunlockput(ip);
+  iunlockput(dp);
+  end_op();
   return 0;
+
+
+
+  fail:
+    ip->type = 0;
+    ip->nlink = 0;
+    iupdate(ip);
+    iunlockput(ip);
+    iunlockput(dp);
+    end_op();
+    return -1;
 }
