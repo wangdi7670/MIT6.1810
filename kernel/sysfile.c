@@ -341,6 +341,28 @@ sys_open(void)
     return -1;
   }
 
+  /* deal with the case that ip->type == T_SYMLINK */
+  int count = 0;
+  char buf[MAXPATH];
+  while (ip->type == T_SYMLINK && !(omode & O_NOFOLLOW)) {
+    if (readi(ip, 0, (uint64)buf, 0, MAXPATH) != MAXPATH) {
+      panic("wrong readi length");
+    }
+    iunlockput(ip);
+
+    if ((ip = namei(buf)) == 0) {
+      end_op();
+      return -1;
+    }
+    ilock(ip);
+    
+    if (++count > 10) {
+      iunlockput(ip);
+      end_op();
+      return -1;
+    }
+  }
+
   if((f = filealloc()) == 0 || (fd = fdalloc(f)) < 0){
     if(f)
       fileclose(f);
