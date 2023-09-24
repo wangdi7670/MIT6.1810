@@ -529,7 +529,6 @@ sys_pipe(void)
 // return success (0) or failure (-1)
 uint64 sys_symlink()
 {
-  // printf("hello, sys_symlink\n");
   char target[MAXPATH];
   char path[MAXPATH];
   
@@ -551,11 +550,12 @@ uint64 sys_symlink()
 
   ilock(dp);
 
-  // TODO: deal with ip != 0
   struct inode *ip = dirlookup(dp, name, 0);
   if (ip != 0) {
-    printf("found name = %s\n", name);
-    panic("the symbolic link already exists");
+    iunlockput(dp);
+    iput(ip);
+    end_op();
+    return 0;
   }
 
   ip = ialloc(dp->dev, T_SYMLINK);
@@ -579,16 +579,10 @@ uint64 sys_symlink()
     panic("wrong write symliink");
   }
 
-/*   char buf[MAXPATH];
-  readi(ip, 0, (uint64)buf, 0, MAXPATH);
-  printf("buf = %s\n", buf); */
-
   iunlockput(ip);
   iunlockput(dp);
   end_op();
   return 0;
-
-
 
   fail:
     ip->type = 0;
