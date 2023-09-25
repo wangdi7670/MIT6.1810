@@ -65,6 +65,7 @@ initlog(int dev, struct superblock *sb)
 }
 
 // Copy committed blocks from log to their home location
+// recovering: 0 indicates that crash doesn't happen during transaction, 1 indicates that crash happens 
 static void
 install_trans(int recovering)
 {
