@@ -503,3 +503,17 @@ sys_pipe(void)
   }
   return 0;
 }
+
+
+uint64 sys_mmap()
+{
+  printf("sys_mmap\n");
+  return -1;
+}
+
+
+uint64 sys_munmap()
+{
+  printf("sys_munmap\n");
+  return -1;
+}
