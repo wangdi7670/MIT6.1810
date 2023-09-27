@@ -65,6 +65,15 @@ usertrap(void)
     intr_on();
 
     syscall();
+  } else if (r_scause() == 12 || r_scause() == 13 || r_scause() == 15) {
+    // scause:
+    // 12: Instruction page fault
+    // 13: Load page fault
+    // 15: Store/AMO page fault
+
+    // stval: contains the address that can't be translated
+    uint64 stval = r_stval();  
+
   } else if((which_dev = devintr()) != 0){
     // ok
   } else {
