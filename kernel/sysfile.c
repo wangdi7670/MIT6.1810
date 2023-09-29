@@ -15,6 +15,23 @@
 #include "sleeplock.h"
 #include "file.h"
 #include "fcntl.h"
+#include "memlayout.h"
+#include "vma.h"
+
+
+struct VMA{
+  struct vma vmas[N_VMA];
+  struct spinlock lock;
+} vma_table;
+
+
+void vinit()
+{
+  initlock(&vma_table.lock, "vma_table");
+  for (int i = 0; i < N_VMA; i++) {
+    vma_table.vmas[i].ref = 0;
+  }
+}
 
 // Fetch the nth word-sized system call argument as a file descriptor
 // and return both the descriptor and the corresponding struct file.
@@ -507,8 +524,81 @@ sys_pipe(void)
 
 uint64 sys_mmap()
 {
-  printf("sys_mmap\n");
-  return -1;
+  // 1. fetch args
+  uint64 addr;
+  int length;
+  int prot;
+  int flags;
+  int fd;
+  int offset;
+
+  argaddr(0, &addr);
+  if (addr != 0) {
+    panic("assume that addr always be zero");
+  }
+
+  argint(1, &length);
+  argint(2, &prot);
+  argint(3, &flags);
+
+  struct proc *p = myproc();
+  argint(4, &fd);
+  struct file *fp = p->ofile[fd];
+  if (!fp || fp->type != FD_INODE || !(fp->ip)) {
+    panic("null file");
+  }
+
+  argint(5, &offset);
+  if (offset != 0) {
+    panic("assume that offset always be zero");
+  }
+
+  // 2. allocate vma
+  int flag = 0;
+  int npages;
+  acquire(&vma_table.lock);
+  for (int i = 0; i < N_VMA; i++) {
+    if (vma_table.vmas[i].ref == 0) {
+      if (p->vma) {
+        panic("repeat vma");
+      }
+
+      vma_table.vmas[i].ref = 1;
+      vma_table.vmas[i].offset = 0;
+      vma_table.vmas[i].fp = fp;
+      filedup(fp); 
+
+      vma_table.vmas[i].permissions = PTE_U | PTE_V;
+      if (fp->readable) {
+        vma_table.vmas[i].permissions |= PTE_R;
+      }
+      if (fp->writable) {
+        vma_table.vmas[i].permissions |= PTE_W;
+      }
+
+      vma_table.vmas[i].length = length;
+
+      npages = length % PGSIZE == 0 ? length / PGSIZE : length / PGSIZE + 1;
+      vma_table.vmas[i].addr = TRAPFRAME - npages * PGSIZE;
+
+      p->vma = &vma_table.vmas[i];
+      flag = 1;
+      break;
+    }
+  }
+  release(&vma_table.lock);
+
+  if (!flag) {
+    panic("no free vma");
+  }
+
+  // 3. add code to cause a page-fault
+  for (int i = 0; i < npages; i++) {
+    pte_t *pte = walk(p->pagetable, p->vma->addr + i * PGSIZE, 1);
+    *pte &= ~PTE_V;
+  }
+
+  return p->vma->addr;
 }
 
 

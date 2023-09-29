@@ -3,8 +3,12 @@
 #include "memlayout.h"
 #include "riscv.h"
 #include "spinlock.h"
+#include "sleeplock.h"
 #include "proc.h"
 #include "defs.h"
+#include "vma.h"
+#include "fs.h"
+#include "file.h"
 
 struct spinlock tickslock;
 uint ticks;
@@ -71,8 +75,52 @@ usertrap(void)
     // 13: Load page fault
     // 15: Store/AMO page fault
 
+    if (!p->vma) {
+      panic("page-fault");
+    }
+
     // stval: contains the address that can't be translated
     uint64 stval = r_stval();  
+    
+    uint64 va_start = (p->vma)->addr;
+    uint64 va_end = va_start + (p->vma)->length - 1;
+
+    if (stval >= va_start && stval <= va_end) {
+      // allocate physical page
+      uint64 pa = (uint64)kalloc();
+      mappages(p->pagetable, stval, PGSIZE, pa, p->vma->permissions);
+      
+      // read 4096 bytes of the relevant file into that page
+      struct file *fp = p->vma->fp;
+      int x = (stval - p->vma->addr) / PGSIZE;
+      uint64 va_dst = PGROUNDDOWN(stval);
+
+      acquiresleep(&(fp->ip->lock));
+      readi(fp->ip, 1, va_dst, p->vma->offset + x*PGSIZE, PGSIZE);
+      releasesleep(&(fp->ip->lock));
+
+      int length = p->vma->length;
+      int npages = length % PGSIZE == 0 ? length / PGSIZE : length / PGSIZE + 1;
+
+      // if the number of bytes to map is greater than the file's size, zeroed rest region 
+      if (x == npages - 1 && fp->ip->size < length) {
+        int n = length - fp->ip->size;
+        uint64 offset = fp->ip->size % PGSIZE;
+
+        for (int i = 0; i < n; i++) {
+          *(char *)(pa + offset + (uint64)i) = 0;
+        }
+      }
+
+    } else {
+      if (r_scause() == 12) {
+        panic("Instruction page fault");
+      } else if (r_scause() == 13) {
+        panic("Load page fault");
+      } else if (r_scause() == 15) {
+        panic("store page fault");
+      }
+    }
 
   } else if((which_dev = devintr()) != 0){
     // ok
