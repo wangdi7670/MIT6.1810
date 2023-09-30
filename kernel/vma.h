@@ -5,4 +5,7 @@ struct vma{
   struct file* fp;
   int ref;
   int offset;
+  int prot;
+  int flags;
+  int removed_pages;
 };

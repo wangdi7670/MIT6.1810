@@ -9,6 +9,7 @@
 #include "vma.h"
 #include "fs.h"
 #include "file.h"
+#include "fcntl.h"
 
 struct spinlock tickslock;
 uint ticks;
@@ -86,6 +87,13 @@ usertrap(void)
     uint64 va_end = va_start + (p->vma)->length - 1;
 
     if (stval >= va_start && stval <= va_end) {
+      if (r_scause() == 13 && !(p->vma->prot & PROT_READ)) {
+        panic("wrong prot PROT_READ");
+      }
+      if (r_scause() == 15 && !(p->vma->prot & PROT_WRITE)) {
+        panic("wrong prot PROT_WRITE"); 
+      }
+
       // allocate physical page
       uint64 pa = (uint64)kalloc();
       mappages(p->pagetable, stval, PGSIZE, pa, p->vma->permissions);
@@ -96,21 +104,16 @@ usertrap(void)
       uint64 va_dst = PGROUNDDOWN(stval);
 
       acquiresleep(&(fp->ip->lock));
-      readi(fp->ip, 1, va_dst, p->vma->offset + x*PGSIZE, PGSIZE);
+      int total = readi(fp->ip, 1, va_dst, p->vma->offset + x*PGSIZE, PGSIZE);
       releasesleep(&(fp->ip->lock));
 
-      int length = p->vma->length;
-      int npages = length % PGSIZE == 0 ? length / PGSIZE : length / PGSIZE + 1;
-
       // if the number of bytes to map is greater than the file's size, zeroed rest region 
-      if (x == npages - 1 && fp->ip->size < length) {
-        int n = length - fp->ip->size;
-        uint64 offset = fp->ip->size % PGSIZE;
-
+      if (total < PGSIZE) {
+        int n = PGSIZE - total;
         for (int i = 0; i < n; i++) {
-          *(char *)(pa + offset + (uint64)i) = 0;
+          *(char *)(pa + total + (uint64)i) = 0;
         }
-      }
+      }      
 
     } else {
       if (r_scause() == 12) {

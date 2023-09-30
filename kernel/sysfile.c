@@ -522,6 +522,7 @@ sys_pipe(void)
 }
 
 
+// mmap returns address at which maps the file, or 0xffffffffffffffff if it fails
 uint64 sys_mmap()
 {
   // 1. fetch args
@@ -548,6 +549,10 @@ uint64 sys_mmap()
     panic("null file");
   }
 
+  if ((prot & PROT_WRITE) && !(fp->writable) && (flags & MAP_SHARED)) {
+    return 0xffffffffffffffff;
+  }
+
   argint(5, &offset);
   if (offset != 0) {
     panic("assume that offset always be zero");
@@ -567,12 +572,15 @@ uint64 sys_mmap()
       vma_table.vmas[i].offset = 0;
       vma_table.vmas[i].fp = fp;
       filedup(fp); 
+      vma_table.vmas[i].prot = prot;
+      vma_table.vmas[i].flags = flags;
+      vma_table.vmas[i].removed_pages = 0;
 
       vma_table.vmas[i].permissions = PTE_U | PTE_V;
-      if (fp->readable) {
+      if (prot & PROT_READ) {
         vma_table.vmas[i].permissions |= PTE_R;
       }
-      if (fp->writable) {
+      if (prot & PROT_WRITE) {
         vma_table.vmas[i].permissions |= PTE_W;
       }
 
@@ -604,6 +612,52 @@ uint64 sys_mmap()
 
 uint64 sys_munmap()
 {
-  printf("sys_munmap\n");
-  return -1;
+  // printf("sys_munmap\n");
+  uint64 addr;
+  int length;
+
+  argaddr(0, &addr);
+  argint(1, &length);
+
+  if (addr % PGSIZE != 0) {
+    panic("addr is not page-aligned");
+  }
+  if (length % PGSIZE) {
+    panic("length is not an integer multiple of PGSIZE");
+  }
+
+  struct proc *p = myproc();
+  if (!(p->vma)) {
+    panic("not had been mmaped");
+  }
+
+  int npages = length / PGSIZE;
+  for (int i = 0; i < npages; i++) {
+    if (walkaddr(p->pagetable, addr + i*PGSIZE) == 0) {
+      panic("munmap: not mapped");
+    }
+  }
+
+  // If an unmapped page has been modified and the file is mapped MAP_SHARED,
+  // write the page back to the file. 
+  if (p->vma->flags & MAP_SHARED) {
+    if (filewrite(p->vma->fp, addr, length) != length) {
+      return -1;
+    }
+  }
+
+  uvmunmap(p->pagetable, addr, npages, 1);
+
+  p->vma->removed_pages += npages;
+  int mapped_pages = length % PGSIZE == 0 ? length / PGSIZE : length / PGSIZE + 1;
+
+  // If munmap removes all pages of a previous mmap,
+  // it should decrement the reference count of the corresponding struct file
+  if (p->vma->removed_pages == mapped_pages) {
+    fileclose(p->vma->fp);
+    p->vma->ref = 0;
+    p->vma = 0;
+  }
+
+  return 0;
 }
