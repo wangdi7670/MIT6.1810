@@ -8,4 +8,5 @@ struct vma{
   int prot;
   int flags;
   int removed_pages;
+  struct vma *next;
 };

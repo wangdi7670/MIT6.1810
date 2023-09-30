@@ -11,6 +11,7 @@ struct superblock;
 
 // sysfile.c
 void            vinit();
+struct vma*     which_vma(uint64 addr, struct proc *p);
 
 // bio.c
 void            binit(void);

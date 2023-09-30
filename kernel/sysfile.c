@@ -30,6 +30,7 @@ void vinit()
   initlock(&vma_table.lock, "vma_table");
   for (int i = 0; i < N_VMA; i++) {
     vma_table.vmas[i].ref = 0;
+    vma_table.vmas[i].next = (struct vma*)0;
   }
 }
 
@@ -561,12 +562,11 @@ uint64 sys_mmap()
   // 2. allocate vma
   int flag = 0;
   int npages;
+  uint64 return_addr;
+
   acquire(&vma_table.lock);
   for (int i = 0; i < N_VMA; i++) {
     if (vma_table.vmas[i].ref == 0) {
-      if (p->vma) {
-        panic("repeat vma");
-      }
 
       vma_table.vmas[i].ref = 1;
       vma_table.vmas[i].offset = 0;
@@ -585,12 +585,27 @@ uint64 sys_mmap()
       }
 
       vma_table.vmas[i].length = length;
+      vma_table.vmas[i].next = (struct vma*)0;
 
       npages = length % PGSIZE == 0 ? length / PGSIZE : length / PGSIZE + 1;
-      vma_table.vmas[i].addr = TRAPFRAME - npages * PGSIZE;
 
-      p->vma = &vma_table.vmas[i];
       flag = 1;
+
+      // deal with mmaped-files greater than 1;
+      if (p->vma) {
+        struct vma * temp_vma = p->vma;
+        while (temp_vma->next) {
+          temp_vma = temp_vma->next;
+        }
+
+        return_addr = temp_vma->addr - npages * PGSIZE;
+        temp_vma->next = &vma_table.vmas[i];
+      } else {
+        return_addr = TRAPFRAME - npages * PGSIZE;
+        p->vma = &vma_table.vmas[i];
+      }
+
+      vma_table.vmas[i].addr = return_addr;
       break;
     }
   }
@@ -606,7 +621,63 @@ uint64 sys_mmap()
     *pte &= ~PTE_V;
   }
 
-  return p->vma->addr;
+  return return_addr;
+}
+
+
+// return vma in proc's vma-list by its addr
+// return 0 if not found
+struct vma* which_vma(uint64 addr, struct proc *p)
+{
+  if (p->vma == 0) {
+    panic("proc had not been mmaped");
+  }
+
+  struct vma *temp = p->vma;
+  while (temp) {
+    if (temp->ref < 1) {
+      panic("wrong ref");
+    }
+
+    uint64 start = temp->addr;
+    uint64 end = start + temp->length - 1;
+    if (addr >= start && addr <= end) {
+      return temp;
+    }
+
+    temp = temp->next;
+  }
+
+  return 0;
+}
+
+
+// delete a vma from proc's vma-list
+void delete_vma(struct vma* v, struct proc *p)
+{
+  if (!v || v->ref < 1 || !(p->vma) || p->vma->ref < 1) {
+    panic("wrong delete_vma");
+  }
+
+  if (p->vma == v) {
+    p->vma = v->next;
+    return;
+  }
+
+  struct vma *temp = p->vma;
+  while(temp) {
+    if (temp->ref < 1) {
+      panic("wrong ref");
+    }
+    if (temp->next == v) {
+      temp->next = v->next;
+      return;
+    }
+
+    temp = temp->next;
+  }
+
+  panic("delete_vma: not found vma");
 }
 
 
@@ -631,33 +702,45 @@ uint64 sys_munmap()
     panic("not had been mmaped");
   }
 
+  struct vma *v = which_vma(addr, p);
+  if (!v) {
+    panic("which_vma: not found vma");
+  }
+
   int npages = length / PGSIZE;
+  int len = v->length;
+  int mapped_pages = len % PGSIZE == 0 ? len / PGSIZE : len / PGSIZE + 1;
+
   for (int i = 0; i < npages; i++) {
     if (walkaddr(p->pagetable, addr + i*PGSIZE) == 0) {
-      panic("munmap: not mapped");
+      // unmaped page has not been allocated by physical page
+      // panic("munmap: not mapped");
+      // ok
+    } else {
+      // If an unmapped page has been modified and the file is mapped MAP_SHARED,
+      // write the page back to the file.
+      if (v->flags & MAP_SHARED)
+      {
+        if (filewrite(v->fp, addr+i*PGSIZE, PGSIZE) != PGSIZE)
+        {
+          return -1;
+        }
+      }
+
+      uvmunmap(p->pagetable, addr+i*PGSIZE, 1, 1);
+    }
+
+    // If munmap removes all pages of a previous mmap,
+    // it should decrement the reference count of the corresponding struct file
+    v->removed_pages += 1;
+
+    if (v->removed_pages == mapped_pages)
+    {
+      fileclose(v->fp);
+      delete_vma(v, p);
+      v->ref = 0;
     }
   }
-
-  // If an unmapped page has been modified and the file is mapped MAP_SHARED,
-  // write the page back to the file. 
-  if (p->vma->flags & MAP_SHARED) {
-    if (filewrite(p->vma->fp, addr, length) != length) {
-      return -1;
-    }
-  }
-
-  uvmunmap(p->pagetable, addr, npages, 1);
-
-  p->vma->removed_pages += npages;
-  int mapped_pages = length % PGSIZE == 0 ? length / PGSIZE : length / PGSIZE + 1;
-
-  // If munmap removes all pages of a previous mmap,
-  // it should decrement the reference count of the corresponding struct file
-  if (p->vma->removed_pages == mapped_pages) {
-    fileclose(p->vma->fp);
-    p->vma->ref = 0;
-    p->vma = 0;
-  }
-
+  
   return 0;
 }

@@ -82,29 +82,33 @@ usertrap(void)
 
     // stval: contains the address that can't be translated
     uint64 stval = r_stval();  
-    
-    uint64 va_start = (p->vma)->addr;
-    uint64 va_end = va_start + (p->vma)->length - 1;
+    struct vma *v = which_vma(stval, p);
+    if (!v) {
+      panic("which_vma: not found vma");
+    }
+
+    uint64 va_start = v->addr;
+    uint64 va_end = va_start + v->length - 1;
 
     if (stval >= va_start && stval <= va_end) {
-      if (r_scause() == 13 && !(p->vma->prot & PROT_READ)) {
+      if (r_scause() == 13 && !(v->prot & PROT_READ)) {
         panic("wrong prot PROT_READ");
       }
-      if (r_scause() == 15 && !(p->vma->prot & PROT_WRITE)) {
+      if (r_scause() == 15 && !(v->prot & PROT_WRITE)) {
         panic("wrong prot PROT_WRITE"); 
       }
 
       // allocate physical page
       uint64 pa = (uint64)kalloc();
-      mappages(p->pagetable, stval, PGSIZE, pa, p->vma->permissions);
+      mappages(p->pagetable, stval, PGSIZE, pa, v->permissions);
       
       // read 4096 bytes of the relevant file into that page
-      struct file *fp = p->vma->fp;
-      int x = (stval - p->vma->addr) / PGSIZE;
+      struct file *fp = v->fp;
+      int x = (stval - v->addr) / PGSIZE;
       uint64 va_dst = PGROUNDDOWN(stval);
 
       acquiresleep(&(fp->ip->lock));
-      int total = readi(fp->ip, 1, va_dst, p->vma->offset + x*PGSIZE, PGSIZE);
+      int total = readi(fp->ip, 1, va_dst, v->offset + x*PGSIZE, PGSIZE);
       releasesleep(&(fp->ip->lock));
 
       // if the number of bytes to map is greater than the file's size, zeroed rest region 
