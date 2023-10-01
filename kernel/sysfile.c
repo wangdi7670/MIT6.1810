@@ -723,7 +723,7 @@ int unmap_vma_all(struct vma *v)
 
   for (int i = 0; i < npages; i++) {
     if (walkaddr(p->pagetable, v->addr+i*PGSIZE) != 0) {
-      if (v->flags & MAP_SHARED)
+      if (v->flags & MAP_SHARED && v->fp->writable)
       {
         if (filewrite(v->fp, v->addr+i*PGSIZE, PGSIZE) != PGSIZE)
         {
@@ -776,7 +776,7 @@ uint64 sys_munmap()
     } else {
       // If an unmapped page has been modified and the file is mapped MAP_SHARED,
       // write the page back to the file.
-      if (v->flags & MAP_SHARED)
+      if (v->flags & MAP_SHARED && v->fp->writable)
       {
         if ((filewrite(v->fp, addr+i*PGSIZE, PGSIZE)) != PGSIZE)
         {
