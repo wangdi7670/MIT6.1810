@@ -1,0 +1,21 @@
+17 hours
+
+/*
+  question 1:
+    if one process mmap two pages, then unmap first page, after this, 
+    if this process try to access to first page at this time, this process should not have access to it.
+  question 2:
+    if one process mmap two pages, then munmap one of them, forked() at this time,
+    child process should have how much mmaped-pages? one or two?
+  My Implemention:
+    1. my process can still have access to the page that had been munmaped,
+    but test case doesn't test qeustion 1, so I do this even though I know it has a bug；
+    2. if one process mmap two pages, then munmap one of them, forked() at this time,
+    child process has all mmaped-region;
+*/
+
+
+最后一个bug，是真的要折磨死我了当时，当时都想放弃了，
+最后发现是因为写回文件时没有判断文件是否可读，我真tm笑了
+
+至此，6.1810的所有lab(COW差一个测试用例没过，network-driver差两个测试用例没过)都做完了

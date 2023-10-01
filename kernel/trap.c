@@ -116,9 +116,7 @@ usertrap(void)
       }      
 
     } else {
-      if (r_scause() == 12) {
-        panic("Instruction page fault");
-      } else if (r_scause() == 13) {
+      if (r_scause() == 13) {
         panic("Load page fault");
       } else if (r_scause() == 15) {
         panic("store page fault");
