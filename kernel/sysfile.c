@@ -523,6 +523,40 @@ sys_pipe(void)
 }
 
 
+struct vma* vget()
+{
+  acquire(&vma_table.lock);
+
+  struct vma *temp;
+  for (temp = vma_table.vmas; temp < &vma_table.vmas[N_VMA]; temp++) {
+    if (temp->ref == 0) {
+      temp->ref = 1;
+      release(&vma_table.lock);
+      return temp;
+    }
+  }
+
+  panic("vget: no free vma");
+}
+
+
+// copy vma except vma.ref, vma.removed_pages, vma.next
+void copy_vma(struct vma *src, struct vma *dst)
+{
+  if (src->ref < 1 || dst->ref < 1) {
+    panic("copy_vma: wrong ref");
+  }
+
+  dst->addr = src->addr;
+  dst->flags = src->flags;
+  dst->fp = src->fp;
+  dst->length = src->length;
+  dst->offset = dst->offset;
+  dst->permissions = src->permissions;
+  dst->prot = src->prot;
+}
+
+
 // mmap returns address at which maps the file, or 0xffffffffffffffff if it fails
 uint64 sys_mmap()
 {
@@ -681,6 +715,30 @@ void delete_vma(struct vma* v, struct proc *p)
 }
 
 
+// return 1 if success, -1 on failure
+int unmap_vma_all(struct vma *v)
+{
+  int npages =  v->length % PGSIZE == 0 ? v->length / PGSIZE : v->length / PGSIZE + 1;
+  struct proc *p = myproc();
+
+  for (int i = 0; i < npages; i++) {
+    if (walkaddr(p->pagetable, v->addr+i*PGSIZE) != 0) {
+      if (v->flags & MAP_SHARED)
+      {
+        if (filewrite(v->fp, v->addr+i*PGSIZE, PGSIZE) != PGSIZE)
+        {
+          return -1;
+        }
+      }
+      uvmunmap(p->pagetable, v->addr+i*PGSIZE, 1, 1);
+    } else {
+      // ok
+    }
+  }
+  return 1;
+}
+
+
 uint64 sys_munmap()
 {
   // printf("sys_munmap\n");
@@ -714,14 +772,13 @@ uint64 sys_munmap()
   for (int i = 0; i < npages; i++) {
     if (walkaddr(p->pagetable, addr + i*PGSIZE) == 0) {
       // unmaped page has not been allocated by physical page
-      // panic("munmap: not mapped");
       // ok
     } else {
       // If an unmapped page has been modified and the file is mapped MAP_SHARED,
       // write the page back to the file.
       if (v->flags & MAP_SHARED)
       {
-        if (filewrite(v->fp, addr+i*PGSIZE, PGSIZE) != PGSIZE)
+        if ((filewrite(v->fp, addr+i*PGSIZE, PGSIZE)) != PGSIZE)
         {
           return -1;
         }

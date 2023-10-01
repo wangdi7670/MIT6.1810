@@ -4,6 +4,7 @@
 #include "riscv.h"
 #include "spinlock.h"
 #include "proc.h"
+#include "vma.h"
 #include "defs.h"
 
 struct cpu cpus[NCPU];
@@ -304,6 +305,43 @@ fork(void)
   // Cause fork to return 0 in the child.
   np->trapframe->a0 = 0;
 
+  // copy vma
+  if (p->vma) {
+    // compute how long is p->vma
+    struct vma *temp = p->vma;
+    int n = 0;
+    while (temp) {
+      n++;
+      temp = temp->next;
+    }
+
+    // copy
+    struct vma *arr[n];
+    temp = p->vma;
+    for (int i = 0; i < n; i++) {
+      arr[i] = vget();
+      copy_vma(temp, arr[i]);
+      arr[i]->removed_pages = 0;
+
+      if (arr[i]->fp == 0) {
+        panic("wrong fp");
+      }
+      filedup(arr[i]->fp);
+      temp = temp->next;
+    }
+
+    // linked them
+    for (int i = 0; i < n; i++) {
+      if (i == n-1) {
+        arr[i]->next = (struct vma*)0;
+        break;
+      }
+      arr[i]->next = arr[i+1];
+    }
+
+    np->vma = arr[0];
+  }
+
   // increment reference counts on open file descriptors.
   for(i = 0; i < NOFILE; i++)
     if(p->ofile[i])
@@ -361,6 +399,20 @@ exit(int status)
       p->ofile[fd] = 0;
     }
   }
+
+  // free all vmas
+  struct vma *v = p->vma;
+  while (v) {
+    struct vma *temp = v->next;
+    if (unmap_vma_all(v) == -1) {
+      panic("exit: unmap fail");
+    }
+
+    fileclose(v->fp);
+    v->ref = 0;
+    v = temp;
+  }
+  p->vma = 0;
 
   begin_op();
   iput(p->cwd);

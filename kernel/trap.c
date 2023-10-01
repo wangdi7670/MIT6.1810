@@ -70,15 +70,11 @@ usertrap(void)
     intr_on();
 
     syscall();
-  } else if (r_scause() == 12 || r_scause() == 13 || r_scause() == 15) {
+  } else if ((r_scause() == 13 || r_scause() == 15) && p->vma) {
     // scause:
     // 12: Instruction page fault
     // 13: Load page fault
     // 15: Store/AMO page fault
-
-    if (!p->vma) {
-      panic("page-fault");
-    }
 
     // stval: contains the address that can't be translated
     uint64 stval = r_stval();  

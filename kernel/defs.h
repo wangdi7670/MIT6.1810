@@ -12,6 +12,9 @@ struct superblock;
 // sysfile.c
 void            vinit();
 struct vma*     which_vma(uint64 addr, struct proc *p);
+struct vma*     vget();
+void            copy_vma(struct vma *src, struct vma *dst);
+int             unmap_vma_all(struct vma *v);
 
 // bio.c
 void            binit(void);
