@@ -40,7 +40,17 @@ int get_index_by_pa(void *pa)
   return (p - KERNBASE) / PGSIZE;    
 }
 
+void increment_pa_ref(void *pa)
+{
+  acquire(&kmem.lock);
+  int i = get_index_by_pa(pa);
+  if (i == -1) {
+    panic("increment_pa_ref");
+  }
 
+  ref_arr[i]++;
+  release(&kmem.lock);
+}
 
 void
 kinit()

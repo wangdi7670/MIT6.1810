@@ -65,6 +65,7 @@ void            kfree(void *);
 void            kinit(void);
 void            kfree_old(void *pa);
 void            kfree_init(void *pa);
+void            increment_pa_ref(void *pa);
 
 // log.c
 void            initlog(int, struct superblock*);
@@ -167,6 +168,7 @@ void            uvmfirst(pagetable_t, uchar *, uint);
 uint64          uvmalloc(pagetable_t, uint64, uint64, int);
 uint64          uvmdealloc(pagetable_t, uint64, uint64);
 int             uvmcopy(pagetable_t, pagetable_t, uint64);
+int             uvmcopy_new(pagetable_t old, pagetable_t new, uint64 sz);
 void            uvmfree(pagetable_t, uint64);
 void            uvmunmap(pagetable_t, uint64, uint64, int);
 void            uvmclear(pagetable_t, uint64);
