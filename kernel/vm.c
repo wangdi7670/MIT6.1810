@@ -363,7 +363,7 @@ int uvmcopy_new(pagetable_t old, pagetable_t new, uint64 sz)
       uvmunmap(new, 0, i / PGSIZE, 1);
       return -1;
     }
-    increment_pa_ref((void*) pa);
+    refup((void*) pa);
   }
   return 0;
 }
@@ -393,13 +393,7 @@ copyout(pagetable_t pagetable, uint64 dstva, char *src, uint64 len)
   while(len > 0){
     va0 = PGROUNDDOWN(dstva);
 
-    pte_t *pte = walk(pagetable, va0, 0);
-    if (pte == 0) {
-      return -1;
-    }
-
-    if (is_cow(va0, pagetable)) {
-      printf("copyout--\n");
+    if (va0 < MAXVA && is_cow(va0, pagetable)) {
       if (copy_on_write(va0, pagetable) == 0) {
         return -1;
       }
