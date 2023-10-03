@@ -153,7 +153,10 @@ kalloc(void)
 
     int i = get_index_by_pa(r);
     if (i == -1) {
-      panic("kalloc");
+      panic("kalloc_new");
+    }
+    if (ref_arr[i] != 0) {
+      panic("kalloc_new");
     }
 
     ref_arr[i]++;

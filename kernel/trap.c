@@ -29,6 +29,45 @@ trapinithart(void)
   w_stvec((uint64)kernelvec);
 }
 
+
+// return 1 on success, 0 on failure
+int copy_on_write(uint64 va, pagetable_t pagetable)
+{
+  va = PGROUNDDOWN(va);
+
+  pte_t *pte = walk(pagetable, va, 0);
+  if (pte == 0) {
+    panic("pte must exists");
+  }
+
+  if (!(*pte & PTE_COW) || (*pte & PTE_W)) {
+    panic("wrong COW_flag");
+  }
+
+  char *new_pa;
+  if ((new_pa = kalloc()) == 0) {
+    return 0;
+  }
+
+  *pte |= PTE_W;  // set W
+  *pte &= ~PTE_COW;  // clear COW
+  uint flags = PTE_FLAGS(*pte);
+
+  uint64 old_pa = PTE2PA(*pte);
+  memmove(new_pa, (char*)old_pa, PGSIZE);
+
+  uvmunmap(pagetable, va, 1, 1);
+
+  if (mappages(pagetable, va, PGSIZE, (uint64)new_pa, flags) != 0) {
+    uvmunmap(pagetable, va, 1, 1);
+    return 0;
+  }
+
+  return 1;
+}
+
+
+
 //
 // handle an interrupt, exception, or system call from user space.
 // called from trampoline.S
@@ -49,7 +88,7 @@ usertrap(void)
   
   // save user program counter.
   p->trapframe->epc = r_sepc();
-  
+
   if(r_scause() == 8){
     // system call
 
@@ -67,7 +106,36 @@ usertrap(void)
     syscall();
   } else if((which_dev = devintr()) != 0){
     // ok
-  } else {
+  } else if (r_scause() == 15) {
+    // scause:
+    // 12: Instruction page fault
+    // 13: Load page fault
+    // 15: Store/AMO page fault
+    uint64 va = r_stval();
+
+    pte_t *pte = walk(p->pagetable, va, 0);
+    if (pte == 0) {
+      panic("set killed");
+      setkilled(p);
+    }
+
+    if (!(*pte & PTE_COW)) {
+      setkilled(p);
+    }
+
+    if (copy_on_write(va, p->pagetable) == 0) {
+      setkilled(p);
+    }
+  }
+  else {
+    // PTE_X = 0, 所以scause = 12，发生的异常
+    uint64 stval = r_stval();
+    pte_t* pte = walk(p->pagetable, stval, 0);
+
+    int flag =  PTE_FLAGS(*pte);
+    printf("flag = %x\n", flag);
+    printf("*pte = %d\n", *pte);
+
     printf("usertrap(): unexpected scause %p pid=%d\n", r_scause(), p->pid);
     printf("            sepc=%p stval=%p\n", r_sepc(), r_stval());
     setkilled(p);
