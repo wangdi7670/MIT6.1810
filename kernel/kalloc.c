@@ -65,7 +65,7 @@ freerange(void *pa_start, void *pa_end)
   char *p;
   p = (char*)PGROUNDUP((uint64)pa_start);
   for(; p + PGSIZE <= (char*)pa_end; p += PGSIZE)
-    kfree_init(p);
+    kfree(p);
 }
 
 
@@ -78,7 +78,7 @@ void kfree_init(void *pa)
 
   ref_arr[i] = 0;
 
-  kfree_old(pa);
+  // kfree_old(pa);
 }
 
 
@@ -87,7 +87,7 @@ void kfree_init(void *pa)
 // call to kalloc().  (The exception is when
 // initializing the allocator; see kinit above.)
 void
-kfree_old(void *pa)
+kfree(void *pa)
 {
   struct run *r;
 
@@ -106,7 +106,7 @@ kfree_old(void *pa)
 }
 
 
-void kfree(void *pa)
+void kfree_new(void *pa)
 {
   struct run *r;
 
@@ -149,9 +149,13 @@ kalloc(void)
   acquire(&kmem.lock);
   r = kmem.freelist;
   if(r) {
+
+/*     if(((uint64)r % PGSIZE) != 0 || (char*)r < end || (uint64)r >= PHYSTOP)
+      panic("kalloc"); */
+
     kmem.freelist = r->next;
 
-    int i = get_index_by_pa(r);
+/*     int i = get_index_by_pa(r);
     if (i == -1) {
       panic("kalloc_new");
     }
@@ -159,7 +163,7 @@ kalloc(void)
       panic("kalloc_new");
     }
 
-    ref_arr[i]++;
+    ref_arr[i]++; */
   }
   release(&kmem.lock);
 

@@ -388,7 +388,7 @@ copyout(pagetable_t pagetable, uint64 dstva, char *src, uint64 len)
   while(len > 0){
     va0 = PGROUNDDOWN(dstva);
 
-    pte_t *pte = walk(pagetable, va0, 0);
+/*     pte_t *pte = walk(pagetable, va0, 0);
     if (pte == 0) {
       return -1;
     }
@@ -397,7 +397,7 @@ copyout(pagetable_t pagetable, uint64 dstva, char *src, uint64 len)
       if (copy_on_write(va0, pagetable) == 0) {
         return -1;
       }
-    }
+    } */
 
 
     pa0 = walkaddr(pagetable, va0);

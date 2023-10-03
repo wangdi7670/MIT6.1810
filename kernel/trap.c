@@ -106,7 +106,8 @@ usertrap(void)
     syscall();
   } else if((which_dev = devintr()) != 0){
     // ok
-  } else if (r_scause() == 15) {
+  } 
+/*   else if (r_scause() == 15) {
     // scause:
     // 12: Instruction page fault
     // 13: Load page fault
@@ -126,15 +127,15 @@ usertrap(void)
     if (copy_on_write(va, p->pagetable) == 0) {
       setkilled(p);
     }
-  }
+  } */
   else {
     // PTE_X = 0, 所以scause = 12，发生的异常
     uint64 stval = r_stval();
     pte_t* pte = walk(p->pagetable, stval, 0);
 
     int flag =  PTE_FLAGS(*pte);
-    printf("flag = %x\n", flag);
-    printf("*pte = %d\n", *pte);
+    printf("flag = %p\n", flag);
+    printf("*pte = %p\n", *pte);
 
     printf("usertrap(): unexpected scause %p pid=%d\n", r_scause(), p->pid);
     printf("            sepc=%p stval=%p\n", r_sepc(), r_stval());
