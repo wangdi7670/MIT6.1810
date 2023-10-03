@@ -47,14 +47,25 @@ freerange(void *pa_start, void *pa_end)
   char *p;
   p = (char*)PGROUNDUP((uint64)pa_start);
   for(; p + PGSIZE <= (char*)pa_end; p += PGSIZE)
-    kfree(p);
+    kfree_init(p);
 }
 
 // kernel/kalloc.c
 void refup(void* pa){
-  acquire(&ref_lock);
+  acquire(&kmem.lock);
   pm_ref[getRefIdx((uint64)pa)] ++;
-  release(&ref_lock);
+  release(&kmem.lock);
+}
+
+
+void kfree_init(void *pa)
+{
+  pm_ref[getRefIdx((uint64)pa)] = 0;
+  
+  struct run *r;
+  r = (struct run *)pa;
+  r->next = kmem.freelist;
+  kmem.freelist = r;
 }
 
 
@@ -70,19 +81,19 @@ kfree(void *pa)
   if(((uint64)pa % PGSIZE) != 0 || (char*)pa < end || (uint64)pa >= PHYSTOP)
     panic("kfree");
 
-  acquire(&ref_lock);
+  acquire(&kmem.lock);
+
   pm_ref[getRefIdx((uint64)pa)] --;
-  if(pm_ref[getRefIdx((uint64)pa)] <= 0){
+
+  if(pm_ref[getRefIdx((uint64)pa)] == 0){
     // Fill with junk to catch dangling refs.
     memset(pa, 1, PGSIZE);
     r = (struct run*)pa;
-    acquire(&kmem.lock);
     r->next = kmem.freelist;
     kmem.freelist = r;
-    release(&kmem.lock);
   }
-  
-  release(&ref_lock);
+
+  release(&kmem.lock);
 }
 
 
@@ -103,7 +114,12 @@ kalloc(void)
 
   if(r) {
     memset((char*)r, 5, PGSIZE); // fill with junk
-    pm_ref[getRefIdx((uint64)r)] = 1; // 初始化不用加锁
+
+    if (pm_ref[getRefIdx((uint64) r)] != 0) {
+      panic("kalloc");
+    }
+
+    pm_ref[getRefIdx((uint64)r)]++; // 初始化不用加锁
   }
   return (void*)r;
 }
