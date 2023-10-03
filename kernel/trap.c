@@ -66,7 +66,14 @@ int copy_on_write(uint64 va, pagetable_t pagetable)
   return 1;
 }
 
-
+int is_cow(uint64 va, pagetable_t pagetable)
+{
+  pte_t *pte = walk(pagetable, va, 0);
+  if (pte == 0) {
+    return 0;
+  }
+  return *pte & PTE_COW;
+}
 
 //
 // handle an interrupt, exception, or system call from user space.
@@ -106,37 +113,33 @@ usertrap(void)
     syscall();
   } else if((which_dev = devintr()) != 0){
     // ok
-  } 
-/*   else if (r_scause() == 15) {
+  }
+  else if (r_scause() == 15 && r_stval() < p->sz && is_cow(r_stval(), p->pagetable)) {
+
+    // int is = is_cow(r_stval(), p->pagetable);
+    // printf("is = %d\n", is);
+    panic("不该进来");
     // scause:
     // 12: Instruction page fault
     // 13: Load page fault
     // 15: Store/AMO page fault
-    uint64 va = r_stval();
+    // uint64 va = r_stval();
 
-    pte_t *pte = walk(p->pagetable, va, 0);
-    if (pte == 0) {
-      panic("set killed");
-      setkilled(p);
-    }
+    // pte_t *pte = walk(p->pagetable, va, 0);
+    // if (pte == 0) {
+    //   panic("set killed");
+    //   setkilled(p);
+    // }
 
-    if (!(*pte & PTE_COW)) {
-      setkilled(p);
-    }
+    // if (!(*pte & PTE_COW)) {
+    //   setkilled(p);
+    // }
 
-    if (copy_on_write(va, p->pagetable) == 0) {
-      setkilled(p);
-    }
-  } */
+    // if (copy_on_write(va, p->pagetable) == 0) {
+    //   setkilled(p);
+    // }
+  }
   else {
-    // PTE_X = 0, 所以scause = 12，发生的异常
-    uint64 stval = r_stval();
-    pte_t* pte = walk(p->pagetable, stval, 0);
-
-    int flag =  PTE_FLAGS(*pte);
-    printf("flag = %p\n", flag);
-    printf("*pte = %p\n", *pte);
-
     printf("usertrap(): unexpected scause %p pid=%d\n", r_scause(), p->pid);
     printf("            sepc=%p stval=%p\n", r_sepc(), r_stval());
     setkilled(p);
