@@ -72,7 +72,7 @@ int is_cow(uint64 va, pagetable_t pagetable)
   if (pte == 0) {
     return 0;
   }
-  return *pte & PTE_COW;
+  return (*pte & PTE_COW) && (*pte & PTE_V) && !(*pte & PTE_W);
 }
 
 //
@@ -114,30 +114,17 @@ usertrap(void)
   } else if((which_dev = devintr()) != 0){
     // ok
   }
-  else if (r_scause() == 15 && r_stval() < p->sz && is_cow(r_stval(), p->pagetable)) {
-
-    // int is = is_cow(r_stval(), p->pagetable);
-    // printf("is = %d\n", is);
-    panic("不该进来");
+  else if ((r_scause() == 15) && r_stval() < p->sz && is_cow(r_stval(), p->pagetable)) {
     // scause:
     // 12: Instruction page fault
     // 13: Load page fault
     // 15: Store/AMO page fault
-    // uint64 va = r_stval();
+    uint64 va = r_stval();
 
-    // pte_t *pte = walk(p->pagetable, va, 0);
-    // if (pte == 0) {
-    //   panic("set killed");
-    //   setkilled(p);
-    // }
-
-    // if (!(*pte & PTE_COW)) {
-    //   setkilled(p);
-    // }
-
-    // if (copy_on_write(va, p->pagetable) == 0) {
-    //   setkilled(p);
-    // }
+    if (copy_on_write(va, p->pagetable) == 0) {
+      panic("cow_handler");
+      setkilled(p);
+    }
   }
   else {
     printf("usertrap(): unexpected scause %p pid=%d\n", r_scause(), p->pid);

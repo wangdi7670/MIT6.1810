@@ -151,6 +151,7 @@ void            trapinithart(void);
 extern struct spinlock tickslock;
 void            usertrapret(void);
 int             copy_on_write(uint64 va, pagetable_t pagetable);
+int             is_cow(uint64 va, pagetable_t pagetable);
 
 // uart.c
 void            uartinit(void);

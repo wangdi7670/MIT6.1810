@@ -347,8 +347,12 @@ int uvmcopy_new(pagetable_t old, pagetable_t new, uint64 sz)
     if ((*pte & PTE_V) == 0) {
       panic("uvmcopy: page not present");
     }
+    
+    if (*pte & PTE_W && *pte & PTE_COW) {
+      panic("wrong flag");
+    }
 
-    if (*pte & PTE_W || *pte & PTE_COW) {
+    if (*pte & PTE_W) {
       *pte &= ~PTE_W;
       *pte |= PTE_COW;
     }
@@ -356,6 +360,7 @@ int uvmcopy_new(pagetable_t old, pagetable_t new, uint64 sz)
     flags = PTE_FLAGS(*pte);
     uint64 pa = PTE2PA(*pte);
     if (mappages(new, i, PGSIZE, pa, flags) != 0) {
+      uvmunmap(new, 0, i / PGSIZE, 1);
       return -1;
     }
     increment_pa_ref((void*) pa);
@@ -388,16 +393,17 @@ copyout(pagetable_t pagetable, uint64 dstva, char *src, uint64 len)
   while(len > 0){
     va0 = PGROUNDDOWN(dstva);
 
-/*     pte_t *pte = walk(pagetable, va0, 0);
+    pte_t *pte = walk(pagetable, va0, 0);
     if (pte == 0) {
       return -1;
     }
 
-    if (*pte & PTE_COW) {
+    if (is_cow(va0, pagetable)) {
+      printf("copyout--\n");
       if (copy_on_write(va0, pagetable) == 0) {
         return -1;
       }
-    } */
+    }
 
 
     pa0 = walkaddr(pagetable, va0);
