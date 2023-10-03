@@ -63,7 +63,6 @@ void            ramdiskrw(struct buf*);
 void*           kalloc(void);
 void            kfree(void *);
 void            kinit(void);
-void refdown(void* pa);
 void refup(void* pa);
 
 // log.c

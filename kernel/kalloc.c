@@ -57,12 +57,6 @@ void refup(void* pa){
   release(&ref_lock);
 }
 
-void refdown(void* pa){
-  acquire(&ref_lock);
-  pm_ref[getRefIdx((uint64)pa)] --;
-  release(&ref_lock);
-}
-
 
 // Free the page of physical memory pointed at by pa,
 // which normally should have been returned by a
