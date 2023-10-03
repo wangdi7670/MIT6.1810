@@ -24,7 +24,6 @@ struct {
 } kmem;
 
 
-struct spinlock ref_lock;  // 别忘了锁
 int pm_ref[(PHYSTOP - KERNBASE)/PGSIZE];  // 记录物理页的引用计数
 
 // va映射为idx
@@ -37,7 +36,6 @@ void
 kinit()
 {
   initlock(&kmem.lock, "kmem");
-  initlock(&ref_lock, "pm_ref");  // this one
   freerange(end, (void*)PHYSTOP);
 }
 
@@ -87,7 +85,7 @@ kfree(void *pa)
 
   if(pm_ref[getRefIdx((uint64)pa)] == 0){
     // Fill with junk to catch dangling refs.
-    memset(pa, 1, PGSIZE);
+    // memset(pa, 1, PGSIZE);
     r = (struct run*)pa;
     r->next = kmem.freelist;
     kmem.freelist = r;
@@ -113,13 +111,13 @@ kalloc(void)
   release(&kmem.lock);
 
   if(r) {
-    memset((char*)r, 5, PGSIZE); // fill with junk
+    // memset((char*)r, 5, PGSIZE); // fill with junk
 
     if (pm_ref[getRefIdx((uint64) r)] != 0) {
       panic("kalloc");
     }
 
-    pm_ref[getRefIdx((uint64)r)]++; // 初始化不用加锁
+    pm_ref[getRefIdx((uint64)r)]++; 
   }
   return (void*)r;
 }
