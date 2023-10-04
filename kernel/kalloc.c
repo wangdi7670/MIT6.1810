@@ -115,6 +115,20 @@ void kfree(void *pa)
   if(((uint64)pa % PGSIZE) != 0 || (char*)pa < end || (uint64)pa >= PHYSTOP)
     panic("kfree_new");
 
+  /*
+  为什么下面这行代码会使程序出错？
+    假如现在有一个 PTE_COW page 的引用次数是2，当一个进程要去解绑这个COW页，创建新的页时，
+    在copy_on_write()函数中调用kfree()不仅会使ref--，同时下面这行代码覆盖了原有的COW-page内存，
+    但是COW-page还被其他进程使用啊，所以就出错了
+
+  这个傻逼bug折磨了我得有10几个小时
+
+  这种错误看似不难，可一旦发生，这种错误不好排查（因为没有异常检测机制）
+
+  这个bug在 usertrap() 里面报了一个 Instruction page fault($scause = 12)错误，拿gdb调都调不了，断点都不知道往哪打
+
+  思考：下次遇到这种问题怎么调？
+  */
   // Fill with junk to catch dangling refs.
   // memset(pa, 1, PGSIZE);
 
