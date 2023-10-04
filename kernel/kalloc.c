@@ -24,12 +24,34 @@ struct {
 } kmem;
 
 
-int pm_ref[(PHYSTOP - KERNBASE)/PGSIZE];  // 记录物理页的引用计数
+int ref_arr[(PHYSTOP - KERNBASE) / PGSIZE];
 
-// va映射为idx
-uint64
-getRefIdx(uint64 pa){
-  return (pa-KERNBASE)/PGSIZE;
+
+// get index in ref_arr by physical address
+// return -1 on failure
+int get_index_by_pa(void *pa)
+{
+  uint64 p = (uint64) pa;
+  if (p > (PHYSTOP - PGSIZE) || p < KERNBASE) {
+    panic("pa is not in the range");
+    return -1;
+  }
+
+  return (p - KERNBASE) / PGSIZE;    
+}
+
+
+// used by uvmcopy_new()
+void increment_pa_ref(void *pa)
+{
+  acquire(&kmem.lock);
+  int i = get_index_by_pa(pa);
+  if (i == -1) {
+    panic("increment_pa_ref");
+  }
+
+  ref_arr[i]++;
+  release(&kmem.lock);
 }
 
 void
@@ -48,22 +70,17 @@ freerange(void *pa_start, void *pa_end)
     kfree_init(p);
 }
 
-// kernel/kalloc.c
-void refup(void* pa){
-  acquire(&kmem.lock);
-  pm_ref[getRefIdx((uint64)pa)] ++;
-  release(&kmem.lock);
-}
-
 
 void kfree_init(void *pa)
 {
-  pm_ref[getRefIdx((uint64)pa)] = 0;
-  
-  struct run *r;
-  r = (struct run *)pa;
-  r->next = kmem.freelist;
-  kmem.freelist = r;
+  int i;
+  if ((i = get_index_by_pa(pa)) == -1) {
+    panic("kfree_init");
+  }
+
+  ref_arr[i] = 0;
+
+  kfree_old(pa);
 }
 
 
@@ -72,21 +89,49 @@ void kfree_init(void *pa)
 // call to kalloc().  (The exception is when
 // initializing the allocator; see kinit above.)
 void
-kfree(void *pa)
+kfree_old(void *pa)
 {
   struct run *r;
 
   if(((uint64)pa % PGSIZE) != 0 || (char*)pa < end || (uint64)pa >= PHYSTOP)
     panic("kfree");
 
+  // Fill with junk to catch dangling refs.
+  memset(pa, 1, PGSIZE);
+
+  r = (struct run*)pa;
+
   acquire(&kmem.lock);
+  r->next = kmem.freelist;
+  kmem.freelist = r;
+  release(&kmem.lock);
+}
 
-  pm_ref[getRefIdx((uint64)pa)] --;
 
-  if(pm_ref[getRefIdx((uint64)pa)] == 0){
-    // Fill with junk to catch dangling refs.
-    // memset(pa, 1, PGSIZE);
-    r = (struct run*)pa;
+void kfree(void *pa)
+{
+  struct run *r;
+
+  if(((uint64)pa % PGSIZE) != 0 || (char*)pa < end || (uint64)pa >= PHYSTOP)
+    panic("kfree_new");
+
+  // Fill with junk to catch dangling refs.
+  memset(pa, 1, PGSIZE);
+
+  r = (struct run*)pa;
+
+  acquire(&kmem.lock);
+  int i = get_index_by_pa(r);
+  if (i == -1) {
+    panic("kfree_new");
+  }
+
+  if (ref_arr[i] < 1) {
+    panic("kfree_new");
+  }
+
+  ref_arr[i]--;
+  if (ref_arr[i] == 0) {
     r->next = kmem.freelist;
     kmem.freelist = r;
   }
@@ -106,18 +151,25 @@ kalloc(void)
   acquire(&kmem.lock);
   r = kmem.freelist;
   if(r) {
+
+    if(((uint64)r % PGSIZE) != 0 || (char*)r < end || (uint64)r >= PHYSTOP)
+      panic("kalloc");
+
     kmem.freelist = r->next;
+
+    int i = get_index_by_pa(r);
+    if (i == -1) {
+      panic("kalloc_new");
+    }
+    if (ref_arr[i] != 0) {
+      panic("kalloc_new");
+    }
+
+    ref_arr[i]++;
   }
   release(&kmem.lock);
 
-  if(r) {
-    // memset((char*)r, 5, PGSIZE); // fill with junk
-
-    if (pm_ref[getRefIdx((uint64) r)] != 0) {
-      panic("kalloc");
-    }
-
-    pm_ref[getRefIdx((uint64)r)]++; 
-  }
+  if(r)
+    memset((char*)r, 5, PGSIZE); // fill with junk
   return (void*)r;
 }
