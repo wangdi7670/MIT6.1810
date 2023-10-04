@@ -116,7 +116,7 @@ void kfree(void *pa)
     panic("kfree_new");
 
   // Fill with junk to catch dangling refs.
-  memset(pa, 1, PGSIZE);
+  // memset(pa, 1, PGSIZE);
 
   r = (struct run*)pa;
 
