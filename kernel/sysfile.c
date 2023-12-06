@@ -511,9 +511,9 @@ sys_connect(void)
 {
   struct file *f;
   int fd;
-  uint32 raddr;
-  uint32 rport;
-  uint32 lport;
+  uint32 raddr;  // remote_address
+  uint32 rport;  // remote_port
+  uint32 lport;  // local_port
 
   argint(0, (int*)&raddr);
   argint(1, (int*)&lport);

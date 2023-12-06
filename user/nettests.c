@@ -21,6 +21,8 @@ ping(uint16 sport, uint16 dport, int attempts)
   // you can send a UDP packet to any Internet address
   // by using a different dst.
   
+  // sport is remote port(2000)
+  // dport is local port(26099)
   if((fd = connect(dst, sport, dport)) < 0){
     fprintf(2, "ping: connect() failed\n");
     exit(1);
