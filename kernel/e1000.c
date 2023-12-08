@@ -150,36 +150,38 @@ e1000_recv(void)
   //
 
   // -----------------------------------------------------
-  /* 1. First ask the E1000 for the ring index at which the next waiting received packet (if any) is located, 
-  by fetching the E1000_RDT control register and adding one modulo RX_RING_SIZE. */
-  int ri = (regs[E1000_RDT] + 1) % RX_RING_SIZE;
+  while (1) {
+    /* 1. First ask the E1000 for the ring index at which the next waiting received packet (if any) is located, 
+    by fetching the E1000_RDT control register and adding one modulo RX_RING_SIZE. */
+    int ri = (regs[E1000_RDT] + 1) % RX_RING_SIZE;
 
-  /* 2. Then check if a new packet is available by checking for the E1000_RXD_STAT_DD bit in the status portion of the descriptor. If not, stop. */
-  if (!(rx_ring[ri].status & E1000_RXD_STAT_DD)) {
-    printf("my-E1000_RXD_STAT_DD\n");
-    return;
+    /* 2. Then check if a new packet is available by checking for the E1000_RXD_STAT_DD bit in the status portion of the descriptor. If not, stop. */
+    if (!(rx_ring[ri].status & E1000_RXD_STAT_DD)) {
+      // printf("my-E1000_RXD_STAT_DD\n");
+      return;
+    }  
+    // printf("ri = %d, status = %d, previous status = %d\n", ri, rx_ring[ri].status, rx_ring[ri-1].status);
+    // display(ri); 
+
+    /* 3. Otherwise, update the mbuf's m->len to the length reported in the descriptor. Deliver the mbuf to the network stack using net_rx(). */
+    struct mbuf *m = rx_mbufs[ri];
+    m->len = rx_ring[ri].length;
+    net_rx(m);
+
+    /* 4. Then allocate a new mbuf using mbufalloc() to replace the one just given to net_rx(). 
+    Program its data pointer (m->head) into the descriptor. Clear the descriptor's status bits to zero. */
+    rx_mbufs[ri] = mbufalloc(0);
+    if (!rx_mbufs[ri])
+      panic("e1000");
+    rx_ring[ri].addr = (uint64) rx_mbufs[ri]->head;
+    rx_ring[ri].status = 0;
+
+    // 5. Finally, update the E1000_RDT register to be the index of the last ring descriptor processed.
+    regs[E1000_RDT] = ri;
+
+    /* 6. At some point the total number of packets that have ever arrived will exceed the ring size (16); make sure your code can handle that. */
+
   }
-  // printf("ri = %d, status = %d, previous status = %d\n", ri, rx_ring[ri].status, rx_ring[ri-1].status);
-  // display(ri); 
-
-  /* 3. Otherwise, update the mbuf's m->len to the length reported in the descriptor. Deliver the mbuf to the network stack using net_rx(). */
-  struct mbuf *m = rx_mbufs[ri];
-  m->len = rx_ring[ri].length;
-  net_rx(m);
-
-  /* 4. Then allocate a new mbuf using mbufalloc() to replace the one just given to net_rx(). 
-  Program its data pointer (m->head) into the descriptor. Clear the descriptor's status bits to zero. */
-  rx_mbufs[ri] = mbufalloc(0);
-  if (!rx_mbufs[ri])
-    panic("e1000");
-  rx_ring[ri].addr = (uint64) rx_mbufs[ri]->head;
-  rx_ring[ri].status = 0;
-
-  // 5. Finally, update the E1000_RDT register to be the index of the last ring descriptor processed.
-  regs[E1000_RDT] = ri;
-
-  /* 6. At some point the total number of packets that have ever arrived will exceed the ring size (16); make sure your code can handle that. */
-
 
 }
 
