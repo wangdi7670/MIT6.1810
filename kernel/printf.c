@@ -140,7 +140,7 @@ void backtrace() {
   uint64 fp = r_fp();  
   uint64 kernel_stack_top = PGROUNDDOWN(fp) + PGSIZE;
 
-  while(fp != kernel_stack_top) {
+  while(fp < kernel_stack_top) {
     printf("%p\n", *(uint64 *)(fp - 8));
     fp = *(uint64 *)(fp-16);
   }
