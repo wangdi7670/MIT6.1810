@@ -109,8 +109,17 @@ uint64 sys_demo(void) {
 }
 
 uint64 sys_sigalarm(void) {
-  printf("hello, sigalarm!\n");
+  int ticks;
+  argint(0, &ticks);
 
+  uint64 addr;
+  argaddr(1, &addr);
+  
+  struct proc *p = myproc();
+  p->interval = ticks;
+  p->alarm_handler = addr;
+  p->alarm_enable = 1;
+  p->ticks = 0;
 
   return 0;
 }
