@@ -111,4 +111,5 @@ struct proc {
   uint64 alarm_handler;
   int ticks;
   struct trapframe *alarmframe;
+  int ongoing_handler;         // 1 is ongoing, 0 not 
 };

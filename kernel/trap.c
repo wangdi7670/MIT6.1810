@@ -67,7 +67,7 @@ usertrap(void)
     syscall();
   } else if((which_dev = devintr()) != 0){
     // ok
-    if (p->alarm_enable) {
+    if (p->alarm_enable && !p->ongoing_handler) {
       p->ticks++;
 
       if (p->ticks == p->interval) {
@@ -76,6 +76,7 @@ usertrap(void)
 
         p->trapframe->epc = p->alarm_handler;
         p->ticks = 0;
+        p->ongoing_handler = 1;
       }
     }
   } else {
