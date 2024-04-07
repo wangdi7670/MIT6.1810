@@ -109,14 +109,19 @@ uint64 sys_demo(void) {
 }
 
 uint64 sys_sigalarm(void) {
-  int ticks;
-  argint(0, &ticks);
+  int interval;
+  argint(0, &interval);
 
   uint64 addr;
   argaddr(1, &addr);
   
   struct proc *p = myproc();
-  p->interval = ticks;
+  if (interval == 0) {
+    p->alarm_enable = 0;
+    return 0;
+  }
+
+  p->interval = interval;
   p->alarm_handler = addr;
   p->alarm_enable = 1;
   p->ticks = 0;
@@ -125,8 +130,7 @@ uint64 sys_sigalarm(void) {
 }
 
 uint64 sys_sigreturn(void) {
-  printf("hello, sigreturn!\n");
-
-
+  struct proc *p = myproc();
+  memmove(p->trapframe, p->alarmframe, 288);
   return 0;
 }
