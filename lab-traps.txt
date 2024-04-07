@@ -1,0 +1,2 @@
+1. prevent re-entrant calls to alarm handler
+2. sys_sigreturn 不能改变 a0 寄存器，因为要回到之前被中断的代码中
