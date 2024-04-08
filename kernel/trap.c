@@ -151,6 +151,7 @@ kerneltrap()
   }
 
   // give up the CPU if this is a timer interrupt.
+  // if this thread is "scheduler thread", then myproc() == 0, so do not yield(), return directly
   if(which_dev == 2 && myproc() != 0 && myproc()->state == RUNNING)
     yield();
 
