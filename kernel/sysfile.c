@@ -503,3 +503,19 @@ sys_pipe(void)
   }
   return 0;
 }
+
+extern struct superblock sb;
+
+uint64 sys_printsb() {
+  printf("info superblock:\n");
+  printf("  size = %d\n", sb.size);
+  printf("  nblocks = %d\n", sb.nblocks);
+  printf("  ninodes = %d\n", sb.ninodes);
+  printf("  nlog = %d\n", sb.nlog);
+  printf("  logstart = %d\n", sb.logstart);
+  printf("  inodestart = %d\n", sb.inodestart);
+  printf("  bmapstart = %d\n", sb.bmapstart);
+  printf("end info -- \n");
+
+  return 0;
+}
