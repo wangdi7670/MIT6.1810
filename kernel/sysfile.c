@@ -519,3 +519,9 @@ uint64 sys_printsb() {
 
   return 0;
 }
+
+uint64 sys_symlink() {
+
+
+  return 0;
+}
