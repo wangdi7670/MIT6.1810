@@ -749,6 +749,7 @@ namex(char *path, int nameiparent, char *name)
   return ip;
 }
 
+// e.g. path = /test.txt, return value is inode of "test.txt"
 struct inode*
 namei(char *path)
 {
@@ -756,6 +757,7 @@ namei(char *path)
   return namex(path, 0, name);
 }
 
+// e.g. path = /test.txt, return value is inode of "/", name = "test.txt"
 struct inode*
 nameiparent(char *path, char *name)
 {

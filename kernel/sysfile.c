@@ -256,6 +256,11 @@ create(char *path, short type, short major, short minor)
   if((ip = dirlookup(dp, name, 0)) != 0){
     iunlockput(dp);
     ilock(ip);
+
+    if (type == T_SYMLINK) {
+      return ip;
+    }
+
     if(type == T_FILE && (ip->type == T_FILE || ip->type == T_DEVICE))
       return ip;
     iunlockput(ip);
@@ -301,6 +306,18 @@ create(char *path, short type, short major, short minor)
   return 0;
 }
 
+struct inode *recursive(struct inode *ip) {
+  if (ip->type == T_SYMLINK) {
+    char path[MAXPATH];
+
+    if (readi(ip, 0, (uint64)path, 0, MAXPATH) != MAXPATH) {
+      return 0;
+    }
+
+    namei(path);
+  }
+}
+
 uint64
 sys_open(void)
 {
@@ -328,6 +345,9 @@ sys_open(void)
       return -1;
     }
     ilock(ip);
+    if (ip->type == T_SYMLINK && !(omode & O_NOFOLLOW)) {
+
+    }
     if(ip->type == T_DIR && omode != O_RDONLY){
       iunlockput(ip);
       end_op();
@@ -521,7 +541,21 @@ uint64 sys_printsb() {
 }
 
 uint64 sys_symlink() {
+  char target[MAXPATH];
+  if (argstr(0, target, MAXPATH) == 0) {
+    return -1;
+  }
 
+  char path[MAXPATH];
+  if (argstr(1, path, MAXPATH) == -1) {
+    return -1;
+  }
 
+  struct inode *ip = create(path, T_SYMLINK, 0, 0);
+  if (writei(ip, 0, target, 0, MAXPATH) != MAXPATH) {
+    return -1;
+  }
+
+  iunlockput(ip);
   return 0;
 }
