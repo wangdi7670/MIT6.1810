@@ -59,9 +59,7 @@ sockalloc(struct file **f, uint32 raddr, uint16 lport, uint16 rport)
   acquire(&lock);
   pos = sockets;
   while (pos) {
-    if (pos->raddr == raddr &&
-        pos->lport == lport &&
-	pos->rport == rport) {
+    if (pos->raddr == raddr && pos->lport == lport && pos->rport == rport) {
       release(&lock);
       goto bad;
     }
