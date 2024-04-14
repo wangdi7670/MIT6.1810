@@ -298,10 +298,7 @@ ilock(struct inode *ip)
   if(ip == 0 || ip->ref < 1)
     panic("ilock");
 
-  // struct proc *p = myproc();
-  // printf("pid%d try acquire lock(inum=%d)\n", p->pid, ip->inum);
   acquiresleep(&ip->lock);
-  // printf("pid%d acquire lock(inum=%d)\n", p->pid, ip->inum);
 
   if(ip->valid == 0){
     bp = bread(ip->dev, IBLOCK(ip->inum, sb));
@@ -327,8 +324,6 @@ iunlock(struct inode *ip)
     panic("iunlock");
 
   releasesleep(&ip->lock);
-  // struct proc *p = myproc();
-  // printf("pid%d release lock(inum=%d)\n", p->pid, ip->inum);
 }
 
 // Drop a reference to an in-memory inode.
