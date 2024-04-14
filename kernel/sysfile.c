@@ -308,22 +308,28 @@ struct inode *recursive(struct inode *ip) {
   }
   struct inode *temp = ip;
 
+  struct proc *p = myproc();
+
   int count = 0;
   while (temp->type == T_SYMLINK) {
     char target[MAXPATH];
 
     if (readi(temp, 0, (uint64)target, 0, MAXPATH) != MAXPATH) {
       iunlockput(temp);
+      printf("pid%d release inum=%d \n", p->pid, temp->inum);
       return 0;
     }
     iunlockput(temp);
+    printf("pid%d release inum=%d \n", p->pid, temp->inum);
 
     if ((temp = namei(target)) == 0) {
       return 0;
     }
+    printf("pid%d lock inum=%d \n", p->pid, temp->inum);
     ilock(temp);
 
     if (++count > 10) {
+      printf("pid%d release inum=%d \n", p->pid, temp->inum);
       iunlockput(temp);
       return 0;
     }
@@ -347,6 +353,7 @@ sys_open(void)
 
   begin_op();
 
+  struct proc *p = myproc();
   if(omode & O_CREATE){
     ip = create(path, T_FILE, 0, 0);
     if(ip == 0){
@@ -358,6 +365,7 @@ sys_open(void)
       end_op();
       return -1;
     }
+    printf("pid%d lock inum=%d \n", p->pid, ip->inum);
     ilock(ip);
 
     if (ip->type == T_SYMLINK && !(omode & O_NOFOLLOW)) {
@@ -407,6 +415,7 @@ sys_open(void)
   }
 
   iunlock(ip);
+  printf("pid%d release inum=%d \n", p->pid, ip->inum);
   end_op();
 
   return fd;
@@ -574,6 +583,8 @@ uint64 sys_symlink() {
     return -1;
   }
 
+  struct proc *p = myproc();
+  // printf("pid%d call symlink\n", p->pid);
   begin_op();
 
   // 1. create soft link
@@ -586,20 +597,24 @@ uint64 sys_symlink() {
     return -1;
   }
 
+  printf("pid%d lock inum=%d \n", p->pid, dp->inum);
   ilock(dp);
 
   if ((ip = dirlookup(dp, name, 0)) != 0) {
-    panic("soft link has already existed");
+    iput(ip);
     iunlockput(dp);
+    printf("pid%d release inum=%d \n", p->pid, dp->inum);
     return -1;
   }
 
   // * allocate an inode
   if ((ip = ialloc(dp->dev, T_SYMLINK)) == 0) {
     iunlockput(dp);
+    printf("pid%d release inum=%d \n", p->pid, dp->inum);
     return -1;
   }
 
+  printf("pid%d lock inum=%d \n", p->pid, ip->inum);
   ilock(ip);
   ip->nlink = 1;
   iupdate(ip);
@@ -614,8 +629,12 @@ uint64 sys_symlink() {
     goto fail;
   }
 
-  iunlockput(dp);
   iunlockput(ip);
+  printf("pid%d release inum=%d \n", p->pid, ip->inum);
+
+  iunlockput(dp);
+  printf("pid%d release inum=%d \n", p->pid, dp->inum);
+
   end_op();
 
   return 0;
@@ -623,8 +642,8 @@ uint64 sys_symlink() {
 fail:
   ip->nlink = 0;
   iupdate(ip);
-  iunlockput(dp);
   iunlockput(ip);
+  iunlockput(dp);
   end_op();
   return -1;
 }
