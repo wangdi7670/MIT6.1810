@@ -256,11 +256,6 @@ create(char *path, short type, short major, short minor)
   if((ip = dirlookup(dp, name, 0)) != 0){
     iunlockput(dp);
     ilock(ip);
-
-    if (type == T_SYMLINK) {
-      return ip;
-    }
-
     if(type == T_FILE && (ip->type == T_FILE || ip->type == T_DEVICE))
       return ip;
     iunlockput(ip);
@@ -306,16 +301,35 @@ create(char *path, short type, short major, short minor)
   return 0;
 }
 
+// return 0 if failure
 struct inode *recursive(struct inode *ip) {
-  if (ip->type == T_SYMLINK) {
-    char path[MAXPATH];
+  if (ip->type != T_SYMLINK) {
+    panic("ip must is a symlink");
+  }
+  struct inode *temp = ip;
 
-    if (readi(ip, 0, (uint64)path, 0, MAXPATH) != MAXPATH) {
+  int count = 0;
+  while (temp->type == T_SYMLINK) {
+    char target[MAXPATH];
+
+    if (readi(temp, 0, (uint64)target, 0, MAXPATH) != MAXPATH) {
+      iunlockput(temp);
       return 0;
     }
+    iunlockput(temp);
 
-    namei(path);
+    if ((temp = namei(target)) == 0) {
+      return 0;
+    }
+    ilock(temp);
+
+    if (++count > 10) {
+      iunlockput(temp);
+      return 0;
+    }
   }
+
+  return temp;
 }
 
 uint64
@@ -345,9 +359,17 @@ sys_open(void)
       return -1;
     }
     ilock(ip);
-    if (ip->type == T_SYMLINK && !(omode & O_NOFOLLOW)) {
 
+    if (ip->type == T_SYMLINK && !(omode & O_NOFOLLOW)) {
+      struct inode *temp = recursive(ip);
+      if (temp == 0) {
+        end_op();
+        return -1;
+      }
+
+      ip = temp;
     }
+
     if(ip->type == T_DIR && omode != O_RDONLY){
       iunlockput(ip);
       end_op();
@@ -540,6 +562,7 @@ uint64 sys_printsb() {
   return 0;
 }
 
+// return 0 if success, -1 if failure
 uint64 sys_symlink() {
   char target[MAXPATH];
   if (argstr(0, target, MAXPATH) == 0) {
@@ -551,11 +574,57 @@ uint64 sys_symlink() {
     return -1;
   }
 
-  struct inode *ip = create(path, T_SYMLINK, 0, 0);
-  if (writei(ip, 0, target, 0, MAXPATH) != MAXPATH) {
+  begin_op();
+
+  // 1. create soft link
+  struct inode *ip, *dp;
+  char name[DIRSIZ];
+
+  // * find parent dir
+  if ((dp = nameiparent(path, name)) == 0) {
+    panic("parent dir does not exist");
     return -1;
   }
 
+  ilock(dp);
+
+  if ((ip = dirlookup(dp, name, 0)) != 0) {
+    panic("soft link has already existed");
+    iunlockput(dp);
+    return -1;
+  }
+
+  // * allocate an inode
+  if ((ip = ialloc(dp->dev, T_SYMLINK)) == 0) {
+    iunlockput(dp);
+    return -1;
+  }
+
+  ilock(ip);
+  ip->nlink = 1;
+  iupdate(ip);
+
+  // * link to parent dir
+  if (dirlink(dp, name, ip->inum) < 0) {
+    goto fail;
+  }
+
+  // 2. write target to symlink
+  if ((writei(ip, 0, (uint64)target, 0, MAXPATH)) != MAXPATH) {
+    goto fail;
+  }
+
+  iunlockput(dp);
   iunlockput(ip);
+  end_op();
+
   return 0;
+
+fail:
+  ip->nlink = 0;
+  iupdate(ip);
+  iunlockput(dp);
+  iunlockput(ip);
+  end_op();
+  return -1;
 }
