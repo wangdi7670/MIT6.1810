@@ -17,6 +17,7 @@ struct entry *table[NBUCKET];
 int keys[NKEYS];
 int nthread = 1;
 
+pthread_mutex_t locks[NBUCKET];
 
 double
 now()
@@ -43,6 +44,7 @@ void put(int key, int value)
 
   // is the key already present?
   struct entry *e = 0;
+  pthread_mutex_lock(&locks[i]);
   for (e = table[i]; e != 0; e = e->next) {
     if (e->key == key)
       break;
@@ -55,6 +57,7 @@ void put(int key, int value)
     insert(key, value, &table[i], table[i]);
   }
 
+  pthread_mutex_unlock(&locks[i]);
 }
 
 static struct entry*
@@ -62,11 +65,13 @@ get(int key)
 {
   int i = key % NBUCKET;
 
+  pthread_mutex_lock(&locks[i]);
 
   struct entry *e = 0;
   for (e = table[i]; e != 0; e = e->next) {
     if (e->key == key) break;
   }
+  pthread_mutex_unlock(&locks[i]);
 
   return e;
 }
@@ -116,6 +121,11 @@ main(int argc, char *argv[])
   assert(NKEYS % nthread == 0);
   for (int i = 0; i < NKEYS; i++) {
     keys[i] = random();
+  }
+
+  // pthread_mutex_init(&lock, NULL);
+  for (int j = 0; j < NBUCKET; j++) {
+    pthread_mutex_init(&locks[j], NULL);
   }
 
   //
