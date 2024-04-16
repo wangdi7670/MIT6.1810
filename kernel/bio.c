@@ -77,13 +77,13 @@ bget(uint dev, uint blockno)
   struct buf *b;
   int index = blockno % LENGTH;
 
-  acquire(&bcache.lock);
+  acquire(&bcache.ht_lock[index]);
 
   // Is the block already cached?
   for (b = bcache.hashtable[index]; b != 0; b = b->next) {
     if (b->dev == dev && b->blockno == blockno) {
       b->refcnt++;
-      release(&bcache.lock);
+      release(&bcache.ht_lock[index]);
       acquiresleep(&b->lock);
       return b;
     }
@@ -97,11 +97,13 @@ bget(uint dev, uint blockno)
       b->blockno = blockno;
       b->valid = 0;
       b->refcnt = 1;
-      release(&bcache.lock);
+      release(&bcache.ht_lock[index]);
       acquiresleep(&b->lock);
       return b;
     }
   }
+
+  release(&bcache.ht_lock[index]);
 
   // 
   // move
@@ -109,6 +111,14 @@ bget(uint dev, uint blockno)
   for (int i = 0; i < LENGTH; i++) {
     if (i == index) {
       continue;
+    }
+
+    if (i < index) {
+      acquire(&bcache.ht_lock[i]);
+      acquire(&bcache.ht_lock[index]);
+    } else {
+      acquire(&bcache.ht_lock[index]);
+      acquire(&bcache.ht_lock[i]);
     }
 
     struct buf *last = 0;
@@ -127,13 +137,18 @@ bget(uint dev, uint blockno)
         b->blockno = blockno;
         b->valid = 0;
         b->refcnt = 1;
-        release(&bcache.lock);
+        // release(&bcache.lock);
+        release(&bcache.ht_lock[i]);
+        release(&bcache.ht_lock[index]);
         acquiresleep(&b->lock);
         return b;
       }
 
       last = b;
     }
+
+    release(&bcache.ht_lock[i]);
+    release(&bcache.ht_lock[index]);
   }
 
   panic("bget: no buffers");
@@ -170,26 +185,31 @@ brelse(struct buf *b)
   if(!holdingsleep(&b->lock))
     panic("brelse");
 
+  int index = b->blockno % LENGTH;
   releasesleep(&b->lock);
 
-  acquire(&bcache.lock);
+  acquire(&bcache.ht_lock[index]);
   b->refcnt--;
   
-  release(&bcache.lock);
+  release(&bcache.ht_lock[index]);
 }
 
 void
 bpin(struct buf *b) {
-  acquire(&bcache.lock);
+  int index = b->blockno % LENGTH;
+
+  acquire(&bcache.ht_lock[index]);
   b->refcnt++;
-  release(&bcache.lock);
+  release(&bcache.ht_lock[index]);
 }
 
 void
 bunpin(struct buf *b) {
-  acquire(&bcache.lock);
+  int index = b->blockno % LENGTH;
+
+  acquire(&bcache.ht_lock[index]);
   b->refcnt--;
-  release(&bcache.lock);
+  release(&bcache.ht_lock[index]);
 }
 
 
